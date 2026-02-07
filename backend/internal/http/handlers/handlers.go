@@ -11,6 +11,7 @@ import (
 	"mathalama-focus/backend/internal/repository/postgresql"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type Repository interface {
@@ -178,6 +179,11 @@ func (h *Handler) AddInterruption(c *gin.Context) {
 		return
 	}
 
+	if _, err := uuid.Parse(sessionID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid sessionID format"})
+		return
+	}
+
 	var req interruptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
@@ -219,6 +225,11 @@ func (h *Handler) UpsertReflection(c *gin.Context) {
 	sessionID := strings.TrimSpace(c.Param("sessionID"))
 	if sessionID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "sessionID is required"})
+		return
+	}
+
+	if _, err := uuid.Parse(sessionID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid sessionID format"})
 		return
 	}
 
@@ -271,6 +282,11 @@ func (h *Handler) sessionAction(c *gin.Context, action func(userID, sessionID st
 	sessionID := strings.TrimSpace(c.Param("sessionID"))
 	if sessionID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "sessionID is required"})
+		return
+	}
+
+	if _, err := uuid.Parse(sessionID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid sessionID format"})
 		return
 	}
 
