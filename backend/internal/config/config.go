@@ -1,0 +1,50 @@
+package config
+
+import (
+	"fmt"
+	"os"
+	"strconv"
+)
+
+type Config struct {
+	Port             string
+	DatabaseURL      string
+	CorsOrigin       string
+	MaxSessionPauses int
+}
+
+func Load() (Config, error) {
+	cfg := Config{
+		Port:             envOrDefault("PORT", "8080"),
+		DatabaseURL:      os.Getenv("DATABASE_URL"),
+		CorsOrigin:       envOrDefault("CORS_ORIGIN", "http://localhost:5173"),
+		MaxSessionPauses: intOrDefault("MAX_SESSION_PAUSES", 3),
+	}
+
+	if cfg.DatabaseURL == "" {
+		return Config{}, fmt.Errorf("DATABASE_URL is required")
+	}
+
+	return cfg, nil
+}
+
+func envOrDefault(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
+}
+
+func intOrDefault(key string, fallback int) int {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+
+	return parsed
+}
