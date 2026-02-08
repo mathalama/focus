@@ -28,11 +28,30 @@ type FocusSession struct {
 	GoalID             string     `json:"goal_id"`
 	RecommendedMinutes int        `json:"recommended_minutes"`
 	IsStrict           bool       `json:"is_strict"`
-	Status             string     `json:"status"`
+	Status             string     `json:"status"` // active | paused | completed | abandoned
 	PauseCount         int        `json:"pause_count"`
 	StartedAt          time.Time  `json:"started_at"`
 	PausedAt           *time.Time `json:"paused_at"`
 	CompletedAt        *time.Time `json:"completed_at"`
+}
+
+type SessionHistoryEntry struct {
+	SessionID          string     `json:"session_id"`
+	GoalID             string     `json:"goal_id"`
+	Topic              string     `json:"topic"`
+	DesiredResult      string     `json:"desired_result"`
+	Tags               []string   `json:"tags"`
+	Status             string     `json:"status"` // completed | abandoned
+	RecommendedMinutes int        `json:"recommended_minutes"`
+	PauseCount         int        `json:"pause_count"`
+	StartedAt          time.Time  `json:"started_at"`
+	CompletedAt        *time.Time `json:"completed_at"`
+}
+
+type SessionHistorySummary struct {
+	CompletedCount int     `json:"completed_count"`
+	TotalMinutes   int     `json:"total_minutes"`
+	AverageMinutes float64 `json:"average_minutes"`
 }
 
 type Item struct {

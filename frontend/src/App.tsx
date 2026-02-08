@@ -12,6 +12,7 @@ import { ReflectionPage } from './pages/ReflectionPage';
 import { HivePage } from './pages/HivePage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { HistoryPage } from './pages/HistoryPage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, authChecked } = useAuth();
@@ -47,6 +48,7 @@ function App() {
               <Route index element={<DashboardPage />} />
               <Route path="hive" element={<HivePage />} />
               <Route path="analytics" element={<ErrorBoundary><AnalyticsPage /></ErrorBoundary>} />
+              <Route path="history" element={<HistoryPage />} />
               <Route path="profile" element={<ProfilePage />} />
               <Route path="session/:sessionId" element={<SessionPage />} />
               <Route path="session/:sessionId/reflection" element={<ReflectionPage />} />

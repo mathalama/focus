@@ -1,7 +1,7 @@
 import React from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, BarChart3, LogOut, Trophy, Activity, UserRound, Languages } from 'lucide-react';
+import { LayoutDashboard, BarChart3, LogOut, Trophy, Activity, UserRound, Languages, History } from 'lucide-react';
 import { cn } from './ui/Button';
 import { useLanguage } from '../context/LanguageContext';
 import { useI18n } from '../lib/i18n';
@@ -17,6 +17,7 @@ export const Layout: React.FC = () => {
     { path: '/', label: t('layout.nav.focus'), icon: LayoutDashboard },
     { path: '/hive', label: t('layout.nav.leaderboard'), icon: Trophy },
     { path: '/analytics', label: t('layout.nav.analytics'), icon: BarChart3 },
+    { path: '/history', label: t('layout.nav.history'), icon: History },
     { path: '/profile', label: t('layout.nav.profile'), icon: UserRound },
   ];
 

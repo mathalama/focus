@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 
 	"mathalama-focus/backend/internal/domain"
 
@@ -42,6 +43,16 @@ type ReflectionInput struct {
 	WhatLearned string
 	WhatWasHard string
 	NextAction  string
+}
+
+type SessionHistoryFilter struct {
+	Period     string
+	Timezone   string
+	Tags       []string
+	MinMinutes int
+	MaxMinutes int
+	Status     string
+	Limit      int
 }
 
 func New(pool *pgxpool.Pool, maxSessionPauses int) *Repository {
@@ -244,6 +255,7 @@ func (r *Repository) StartSession(ctx context.Context, userID string, input Star
 		&session.PausedAt,
 		&session.CompletedAt,
 	); err == nil {
+		normalizeSessionStatus(&session)
 		return session, nil
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return domain.FocusSession{}, fmt.Errorf("find active session: %w", err)
@@ -294,6 +306,7 @@ func (r *Repository) StartSession(ctx context.Context, userID string, input Star
 		return domain.FocusSession{}, fmt.Errorf("start session: %w", err)
 	}
 
+	normalizeSessionStatus(&session)
 	return session, nil
 }
 
@@ -360,6 +373,7 @@ func (r *Repository) PauseSession(ctx context.Context, userID, sessionID string)
 		return domain.FocusSession{}, fmt.Errorf("log pause interruption: %w", err)
 	}
 
+	normalizeSessionStatus(&session)
 	return session, nil
 }
 
@@ -397,6 +411,7 @@ func (r *Repository) ResumeSession(ctx context.Context, userID, sessionID string
 		return domain.FocusSession{}, fmt.Errorf("resume session: %w", err)
 	}
 
+	normalizeSessionStatus(&session)
 	return session, nil
 }
 
@@ -431,6 +446,7 @@ func (r *Repository) ResetSession(ctx context.Context, userID, sessionID string)
 		return domain.FocusSession{}, fmt.Errorf("reset session: %w", err)
 	}
 
+	normalizeSessionStatus(&session)
 	return session, nil
 }
 
@@ -465,6 +481,40 @@ func (r *Repository) AbandonSession(ctx context.Context, userID, sessionID strin
 		return domain.FocusSession{}, fmt.Errorf("abandon session: %w", err)
 	}
 
+	normalizeSessionStatus(&session)
+	return session, nil
+}
+
+func (r *Repository) GetActiveSession(ctx context.Context, userID string) (domain.FocusSession, error) {
+	const query = `
+		SELECT id, user_id, goal_id, recommended_minutes, is_strict, status, pause_count, started_at, paused_at, completed_at
+		FROM focus_sessions
+		WHERE user_id = $1
+		  AND status IN ('active', 'paused')
+		ORDER BY started_at DESC
+		LIMIT 1
+	`
+
+	var session domain.FocusSession
+	if err := r.pool.QueryRow(ctx, query, userID).Scan(
+		&session.ID,
+		&session.UserID,
+		&session.GoalID,
+		&session.RecommendedMinutes,
+		&session.IsStrict,
+		&session.Status,
+		&session.PauseCount,
+		&session.StartedAt,
+		&session.PausedAt,
+		&session.CompletedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.FocusSession{}, ErrNotFound
+		}
+		return domain.FocusSession{}, fmt.Errorf("get active session: %w", err)
+	}
+
+	normalizeSessionStatus(&session)
 	return session, nil
 }
 
@@ -494,6 +544,7 @@ func (r *Repository) GetSession(ctx context.Context, userID, sessionID string) (
 		return domain.FocusSession{}, fmt.Errorf("get session: %w", err)
 	}
 
+	normalizeSessionStatus(&session)
 	return session, nil
 }
 
@@ -597,7 +648,162 @@ func (r *Repository) CompleteSession(ctx context.Context, userID, sessionID stri
 		return domain.FocusSession{}, fmt.Errorf("commit transaction: %w", err)
 	}
 
+	normalizeSessionStatus(&session)
 	return session, nil
+}
+
+func (r *Repository) ListSessionHistory(ctx context.Context, userID string, filter SessionHistoryFilter) ([]domain.SessionHistoryEntry, domain.SessionHistorySummary, error) {
+	status := strings.ToLower(strings.TrimSpace(filter.Status))
+	switch status {
+	case "", "completed":
+		status = "completed"
+	case "abandoned", "all":
+	default:
+		status = "completed"
+	}
+
+	period := strings.ToLower(strings.TrimSpace(filter.Period))
+	switch period {
+	case "", "all", "today", "week", "month":
+	default:
+		period = "all"
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 200
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+
+	timezone := strings.TrimSpace(filter.Timezone)
+	if timezone == "" {
+		timezone = "UTC"
+	}
+
+	var (
+		args       = []any{userID}
+		argPos     = 2
+		conditions = []string{
+			"fs.user_id = $1",
+			"fs.completed_at IS NOT NULL",
+		}
+	)
+
+	switch status {
+	case "completed":
+		conditions = append(conditions, "fs.status = 'completed'")
+	case "abandoned":
+		conditions = append(conditions, "fs.status = 'cancelled'")
+	case "all":
+		conditions = append(conditions, "fs.status IN ('completed', 'cancelled')")
+	}
+
+	if period != "all" {
+		args = append(args, timezone)
+		tzArg := argPos
+		argPos++
+		switch period {
+		case "today":
+			conditions = append(conditions, fmt.Sprintf("(fs.completed_at AT TIME ZONE $%d)::date = (NOW() AT TIME ZONE $%d)::date", tzArg, tzArg))
+		case "week":
+			conditions = append(conditions, fmt.Sprintf("(fs.completed_at AT TIME ZONE $%d)::date >= DATE_TRUNC('week', NOW() AT TIME ZONE $%d)::date", tzArg, tzArg))
+		case "month":
+			conditions = append(conditions, fmt.Sprintf("(fs.completed_at AT TIME ZONE $%d)::date >= DATE_TRUNC('month', NOW() AT TIME ZONE $%d)::date", tzArg, tzArg))
+		}
+	}
+
+	if len(filter.Tags) > 0 {
+		safeTags := make([]string, 0, len(filter.Tags))
+		for _, tag := range filter.Tags {
+			trimmed := strings.ToLower(strings.TrimSpace(tag))
+			if trimmed != "" {
+				safeTags = append(safeTags, trimmed)
+			}
+		}
+		if len(safeTags) > 0 {
+			args = append(args, safeTags)
+			conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM unnest(COALESCE(g.tags, '{}'::text[])) AS t(tag) WHERE lower(t.tag) = ANY($%d::text[]))", argPos))
+			argPos++
+		}
+	}
+
+	if filter.MinMinutes > 0 {
+		args = append(args, filter.MinMinutes)
+		conditions = append(conditions, fmt.Sprintf("fs.recommended_minutes >= $%d", argPos))
+		argPos++
+	}
+	if filter.MaxMinutes > 0 {
+		args = append(args, filter.MaxMinutes)
+		conditions = append(conditions, fmt.Sprintf("fs.recommended_minutes <= $%d", argPos))
+		argPos++
+	}
+
+	args = append(args, limit)
+	limitArg := argPos
+
+	query := fmt.Sprintf(`
+		SELECT
+			fs.id,
+			fs.goal_id,
+			COALESCE(g.topic, 'Unknown Goal') AS topic,
+			COALESCE(g.desired_result, '') AS desired_result,
+			COALESCE(g.tags, '{}'::text[]) AS tags,
+			fs.status,
+			fs.recommended_minutes,
+			fs.pause_count,
+			fs.started_at,
+			fs.completed_at
+		FROM focus_sessions fs
+		LEFT JOIN goals g ON g.id = fs.goal_id
+		WHERE %s
+		ORDER BY fs.completed_at DESC
+		LIMIT $%d
+	`, strings.Join(conditions, "\n  AND "), limitArg)
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, domain.SessionHistorySummary{}, fmt.Errorf("list session history: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]domain.SessionHistoryEntry, 0)
+	summary := domain.SessionHistorySummary{}
+
+	for rows.Next() {
+		var item domain.SessionHistoryEntry
+		if err := rows.Scan(
+			&item.SessionID,
+			&item.GoalID,
+			&item.Topic,
+			&item.DesiredResult,
+			&item.Tags,
+			&item.Status,
+			&item.RecommendedMinutes,
+			&item.PauseCount,
+			&item.StartedAt,
+			&item.CompletedAt,
+		); err != nil {
+			return nil, domain.SessionHistorySummary{}, fmt.Errorf("scan session history: %w", err)
+		}
+		if item.Status == "cancelled" {
+			item.Status = "abandoned"
+		}
+		summary.CompletedCount++
+		summary.TotalMinutes += item.RecommendedMinutes
+		items = append(items, item)
+	}
+
+	if rows.Err() != nil {
+		return nil, domain.SessionHistorySummary{}, fmt.Errorf("iterate session history: %w", rows.Err())
+	}
+
+	if summary.CompletedCount > 0 {
+		summary.AverageMinutes = math.Round((float64(summary.TotalMinutes)/float64(summary.CompletedCount))*10) / 10
+	}
+
+	return items, summary, nil
 }
 
 func (r *Repository) UpsertReflection(ctx context.Context, userID, sessionID string, input ReflectionInput) (domain.Reflection, error) {
@@ -944,4 +1150,13 @@ func clampScore(value float64) float64 {
 		return 100
 	}
 	return math.Round(value*10) / 10
+}
+
+func normalizeSessionStatus(session *domain.FocusSession) {
+	if session == nil {
+		return
+	}
+	if session.Status == "cancelled" {
+		session.Status = "abandoned"
+	}
 }

@@ -12,11 +12,13 @@ export const SessionPage: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const [session, setSession] = useState<FocusSession | null>(null);
+  const [completedCount, setCompletedCount] = useState(0);
   const sessionRef = useRef<FocusSession | null>(null);
   const [timeLeft, setTimeLeft] = useState(0); 
   const [breakTime, setBreakTime] = useState(0); // Local break timer in seconds
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   // Keep ref in sync with state
   useEffect(() => { sessionRef.current = session; }, [session]);
@@ -35,7 +37,7 @@ export const SessionPage: React.FC = () => {
       return;
     }
 
-    if (nextSession.status === 'completed' || nextSession.status === 'cancelled') {
+    if (nextSession.status === 'completed' || nextSession.status === 'abandoned') {
       setTimeLeft(0);
       return;
     }
@@ -75,6 +77,20 @@ export const SessionPage: React.FC = () => {
     return () => clearInterval(interval);
   }, [breakActive]);
 
+  const fetchCompletedCount = useCallback(async () => {
+    try {
+      const history = await api.sessions.history({
+        status: 'completed',
+        period: 'all',
+        timezone,
+        limit: 1000,
+      });
+      setCompletedCount(history.summary?.completed_count ?? history.sessions.length);
+    } catch (err) {
+      console.error(err);
+    }
+  }, [timezone]);
+
   const fetchSession = useCallback(async (isInitialLoad = false) => {
     if (!sessionId) return;
     if (isInitialLoad) {
@@ -95,13 +111,22 @@ export const SessionPage: React.FC = () => {
         navigate(`/session/${sessionId}/reflection`, { replace: true });
         return;
       }
-      if (nextSession.status === 'cancelled') {
+      if (nextSession.status === 'abandoned') {
         navigate('/', { replace: true });
         return;
       }
     } catch (err) {
       console.error(err);
-      navigate('/');
+      try {
+        const active = await api.sessions.active();
+        if (active.session?.id && active.session.id !== sessionId) {
+          navigate(`/session/${active.session.id}`, { replace: true });
+          return;
+        }
+      } catch (activeErr) {
+        console.error(activeErr);
+      }
+      navigate('/', { replace: true });
     } finally {
       if (isInitialLoad) {
         setLoading(false);
@@ -112,6 +137,10 @@ export const SessionPage: React.FC = () => {
   useEffect(() => {
     void fetchSession(true);
   }, [fetchSession]);
+
+  useEffect(() => {
+    void fetchCompletedCount();
+  }, [fetchCompletedCount]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -148,10 +177,7 @@ export const SessionPage: React.FC = () => {
         return;
       }
       if (action === 'complete') {
-        // Increment local session count for smart breaks
-        const currentCount = parseInt(localStorage.getItem('completedSessionsCount') || '0', 10);
-        localStorage.setItem('completedSessionsCount', (currentCount + 1).toString());
-        
+        setCompletedCount((prev) => prev + 1);
         navigate(`/session/${sessionId}/reflection`);
         return;
       }
@@ -172,9 +198,8 @@ export const SessionPage: React.FC = () => {
   if (loading) return <div className="flex h-screen items-center justify-center font-mono text-xs">{t('session.initializing')}</div>;
   if (!session) return <div className="flex h-screen items-center justify-center font-mono text-xs text-red-500">{t('session.notFound')}</div>;
 
-  // Smart Break Logic
-  const sessionsCompleted = parseInt(localStorage.getItem('completedSessionsCount') || '0', 10);
-  const isLongBreakDue = sessionsCompleted > 0 && sessionsCompleted % 3 === 0;
+  // Smart break suggestion is derived from completed sessions on backend history.
+  const isLongBreakDue = completedCount > 0 && completedCount % 3 === 0;
 
   // Display logic
   const displayTime = breakTime > 0 ? breakTime : timeLeft;
@@ -194,7 +219,7 @@ export const SessionPage: React.FC = () => {
     active: t('session.status.active'),
     paused: t('session.status.paused'),
     completed: t('session.status.completed'),
-    cancelled: t('session.status.cancelled'),
+    abandoned: t('session.status.abandoned'),
   };
 
   return (

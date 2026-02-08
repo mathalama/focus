@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { api, Goal } from '../lib/api';
@@ -16,12 +16,13 @@ export const DashboardPage: React.FC = () => {
   const { user } = useAuth();
   const { language } = useLanguage();
   const { t } = useI18n();
+  const navigate = useNavigate();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [goalHistory, setGoalHistory] = useState<Goal[]>([]);
   const [dailyQuote, setDailyQuote] = useState<DailyQuote>(() => getDailyQuote(language, new Date()));
   const [loading, setLoading] = useState(true);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const [goalsData, historyData] = await Promise.all([
         api.goals.list(),
@@ -34,11 +35,31 @@ export const DashboardPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    let isMounted = true;
+
+    const restoreOrLoad = async () => {
+      try {
+        const active = await api.sessions.active();
+        if (isMounted && active.session?.id) {
+          navigate(`/session/${active.session.id}`, { replace: true });
+          return;
+        }
+      } catch (err) {
+        console.error(err);
+      }
+      if (isMounted) {
+        await fetchData();
+      }
+    };
+
+    void restoreOrLoad();
+    return () => {
+      isMounted = false;
+    };
+  }, [fetchData, navigate]);
 
   useEffect(() => {
     let timer: number | undefined;

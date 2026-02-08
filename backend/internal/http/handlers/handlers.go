@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"mathalama-focus/backend/internal/auth"
@@ -27,6 +28,8 @@ type Repository interface {
 	ResumeSession(ctx context.Context, userID, sessionID string) (domain.FocusSession, error)
 	AbandonSession(ctx context.Context, userID, sessionID string) (domain.FocusSession, error)
 	ResetSession(ctx context.Context, userID, sessionID string) (domain.FocusSession, error)
+	GetActiveSession(ctx context.Context, userID string) (domain.FocusSession, error)
+	ListSessionHistory(ctx context.Context, userID string, filter postgresql.SessionHistoryFilter) ([]domain.SessionHistoryEntry, domain.SessionHistorySummary, error)
 	GetSession(ctx context.Context, userID, sessionID string) (domain.FocusSession, error)
 	AddInterruption(ctx context.Context, userID, sessionID, reason string) (domain.Interruption, error)
 	CompleteSession(ctx context.Context, userID, sessionID string) (domain.FocusSession, error)
@@ -220,6 +223,69 @@ func (h *Handler) StartSession(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"session": session})
+}
+
+func (h *Handler) GetActiveSession(c *gin.Context) {
+	userID := middleware.UserID(c)
+
+	session, err := h.repo.GetActiveSession(c.Request.Context(), userID)
+	if errors.Is(err, postgresql.ErrNotFound) {
+		c.JSON(http.StatusOK, gin.H{"session": nil})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get active session"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"session": session})
+}
+
+func (h *Handler) ListSessionHistory(c *gin.Context) {
+	userID := middleware.UserID(c)
+
+	minMinutes, err := parseOptionalInt(c.Query("min_minutes"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "min_minutes must be a positive integer"})
+		return
+	}
+	maxMinutes, err := parseOptionalInt(c.Query("max_minutes"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "max_minutes must be a positive integer"})
+		return
+	}
+	limit, err := parseOptionalInt(c.Query("limit"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "limit must be a positive integer"})
+		return
+	}
+
+	tags := make([]string, 0)
+	for _, tag := range strings.Split(strings.TrimSpace(c.Query("tags")), ",") {
+		clean := strings.TrimSpace(tag)
+		if clean != "" {
+			tags = append(tags, clean)
+		}
+	}
+
+	sessions, summary, err := h.repo.ListSessionHistory(c.Request.Context(), userID, postgresql.SessionHistoryFilter{
+		Period:     strings.TrimSpace(c.DefaultQuery("period", "all")),
+		Timezone:   strings.TrimSpace(c.Query("timezone")),
+		Tags:       tags,
+		MinMinutes: minMinutes,
+		MaxMinutes: maxMinutes,
+		Status:     strings.TrimSpace(c.DefaultQuery("status", "completed")),
+		Limit:      limit,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load session history"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"sessions": sessions,
+		"summary":  summary,
+	})
 }
 
 func (h *Handler) PauseSession(c *gin.Context) {
@@ -537,4 +603,16 @@ func (h *Handler) sessionAction(c *gin.Context, action func(userID, sessionID st
 	}
 
 	c.JSON(http.StatusOK, gin.H{"session": payload})
+}
+
+func parseOptionalInt(raw string) (int, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return 0, nil
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < 0 {
+		return 0, errors.New("invalid integer")
+	}
+	return parsed, nil
 }

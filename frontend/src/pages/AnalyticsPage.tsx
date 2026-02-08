@@ -54,9 +54,11 @@ const AnalyticsContent: React.FC<{
   activity: DailyActivity[];
 }> = ({ overview, activity }) => {
   const { language, t } = useI18n();
+  const locale = getLocale(language);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [dayDetails, setDayDetails] = useState<DayDetails | null>(null);
   const [dayDetailsLoading, setDayDetailsLoading] = useState(false);
+  const [heatmapWidth, setHeatmapWidth] = useState(0);
   const [tooltip, setTooltip] = useState<HoverTooltip>({
     visible: false,
     x: 0,
@@ -66,12 +68,29 @@ const AnalyticsContent: React.FC<{
     totalMinutes: 0,
   });
   const hoverTimerRef = useRef<number | null>(null);
+  const heatmapRef = useRef<HTMLDivElement | null>(null);
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   useEffect(() => () => {
     if (hoverTimerRef.current) {
       window.clearTimeout(hoverTimerRef.current);
     }
+  }, []);
+
+  useEffect(() => {
+    const element = heatmapRef.current;
+    if (!element || typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver((entries) => {
+      const nextWidth = Math.floor(entries[0]?.contentRect?.width ?? 0);
+      setHeatmapWidth(nextWidth);
+    });
+    observer.observe(element);
+    setHeatmapWidth(Math.floor(element.getBoundingClientRect().width));
+
+    return () => {
+      observer.disconnect();
+    };
   }, []);
 
   const today = useMemo(() => new Date(), []);
@@ -93,8 +112,22 @@ const AnalyticsContent: React.FC<{
     return { weeks: w, activityByDate: byDate };
   }, [today, rangeStart, activity]);
 
-  const cellSize = 10;
-  const cellGap = 3;
+  const { cellSize, cellGap } = useMemo(() => {
+    const maxCell = 10;
+    const minCell = 7;
+    const defaultGap = 3;
+    const compactGap = 2;
+    if (!weeks.length || heatmapWidth <= 0) {
+      return { cellSize: maxCell, cellGap: defaultGap };
+    }
+
+    // 34px reserves weekday labels and inner spacing.
+    const available = heatmapWidth - 34;
+    const candidate = Math.floor((available - (weeks.length - 1) * compactGap) / weeks.length);
+    const size = Math.max(minCell, Math.min(maxCell, candidate));
+    return { cellSize: size, cellGap: size <= 8 ? compactGap : defaultGap };
+  }, [heatmapWidth, weeks.length]);
+
   const gridPixelWidth = weeks.length * cellSize + (weeks.length - 1) * cellGap;
   const weekDayColumnHeight = 7 * cellSize + 6 * cellGap;
 
@@ -106,18 +139,28 @@ const AnalyticsContent: React.FC<{
       if (monthStart) {
         const key = format(monthStart, 'yyyy-MM');
         if (key !== lastMonthKey) {
-          markers.push({ weekIndex, label: format(monthStart, 'MMM') });
+          markers.push({
+            weekIndex,
+            label: monthStart
+              .toLocaleDateString(locale, { month: 'short' })
+              .replace('.', '')
+              .toUpperCase(),
+          });
           lastMonthKey = key;
         }
       }
     }
 
-    if (markers.length === 0 || markers[0].weekIndex !== 0 || format(rangeStart, 'MMM') !== markers[0].label) {
-      markers.unshift({ weekIndex: 0, label: format(rangeStart, 'MMM') });
+    const firstRangeMonth = rangeStart
+      .toLocaleDateString(locale, { month: 'short' })
+      .replace('.', '')
+      .toUpperCase();
+    if (markers.length === 0 || markers[0].weekIndex !== 0 || firstRangeMonth !== markers[0].label) {
+      markers.unshift({ weekIndex: 0, label: firstRangeMonth });
     }
 
     return markers;
-  }, [rangeStart, today, weeks]);
+  }, [locale, rangeStart, today, weeks]);
 
   const intensityClass = (minutes: number, inRange: boolean) => {
     if (!inRange) return 'bg-transparent';
@@ -130,7 +173,7 @@ const AnalyticsContent: React.FC<{
 
   const formatLongDate = (dateKey: string) => {
     const parsed = new Date(`${dateKey}T00:00:00`);
-    return parsed.toLocaleDateString(getLocale(language), {
+    return parsed.toLocaleDateString(locale, {
       weekday: 'long',
       month: 'short',
       day: 'numeric',
@@ -200,7 +243,7 @@ const AnalyticsContent: React.FC<{
   };
 
   return (
-    <div className="space-y-8 font-sans relative">
+    <div className="relative space-y-8 font-sans">
       <header className="border-b border-border pb-4">
         <h1 className="text-2xl font-bold tracking-tight font-mono uppercase text-primary">{t('analytics.title')}</h1>
         <p className="text-sm text-muted-foreground font-mono mt-1">
@@ -236,7 +279,7 @@ const AnalyticsContent: React.FC<{
       </div>
 
       {/* Heatmap */}
-      <Card className="bg-surface border-border shadow-none">
+      <Card ref={heatmapRef} className="bg-surface border-border shadow-none">
         <h2 className="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('analytics.activityLog')}</h2>
         <div className="overflow-x-auto pb-1">
           <div className="w-max">
@@ -254,9 +297,9 @@ const AnalyticsContent: React.FC<{
 
             <div className="flex items-start gap-2">
               <div className="mt-[1px] flex w-6 flex-col justify-between text-[10px] font-mono uppercase tracking-wider text-muted-foreground" style={{ height: `${weekDayColumnHeight}px` }}>
-                <span>Mon</span>
-                <span>Wed</span>
-                <span>Fri</span>
+                <span>{t('analytics.weekday.mon')}</span>
+                <span>{t('analytics.weekday.wed')}</span>
+                <span>{t('analytics.weekday.fri')}</span>
               </div>
 
               <div className="flex" style={{ gap: `${cellGap}px` }}>
@@ -282,7 +325,8 @@ const AnalyticsContent: React.FC<{
                           onMouseEnter={(event) => onCellMouseEnter(event, dateKey, inRange, sessionCount, totalMinutes)}
                           onMouseMove={onCellMouseMove}
                           onMouseLeave={onCellMouseLeave}
-                          className={`appearance-none border-0 p-0 h-2.5 w-2.5 rounded-[2px] transition-all hover:ring-1 hover:ring-accent/70 ${intensityClass(totalMinutes, inRange)} ${isSelected ? 'ring-1 ring-accent' : ''}`}
+                          className={`appearance-none border-0 p-0 rounded-[2px] transition-all hover:ring-1 hover:ring-accent/70 ${intensityClass(totalMinutes, inRange)} ${isSelected ? 'ring-1 ring-accent' : ''}`}
+                          style={{ height: `${cellSize}px`, width: `${cellSize}px` }}
                           aria-label={`${dateKey}: ${t('analytics.contributions', { count: sessionCount })}`}
                         />
                       );
@@ -328,11 +372,11 @@ const AnalyticsContent: React.FC<{
             ) : (
               <div className="grid gap-2">
                 {dayDetails.contributions.map((item) => (
-                  <div key={item.session_id} className="flex items-center justify-between rounded-md border border-border bg-background/60 px-3 py-2">
+                    <div key={item.session_id} className="flex items-center justify-between rounded-md border border-border bg-background/60 px-3 py-2">
                     <div className="min-w-0">
                       <p className="truncate text-xs font-mono font-bold uppercase tracking-wide text-primary">{item.topic}</p>
                       <p className="text-[11px] text-muted-foreground">
-                        {new Date(item.started_at).toLocaleTimeString(getLocale(language), { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(item.started_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
                     <span className="ml-3 text-xs font-mono uppercase text-muted-foreground">{t('analytics.minutesShort', { minutes: item.minutes })}</span>

@@ -19,16 +19,47 @@ export interface Goal {
   created_at: string;
 }
 
+export type SessionStatus = 'active' | 'paused' | 'completed' | 'abandoned';
+
 export interface FocusSession {
   id: string;
   goal_id: string;
-  status: 'active' | 'paused' | 'completed' | 'cancelled';
+  status: SessionStatus;
   recommended_minutes: number;
   is_strict: boolean;
   pause_count: number;
   started_at: string;
   paused_at?: string;
   completed_at?: string;
+}
+
+export interface SessionHistoryEntry {
+  session_id: string;
+  goal_id: string;
+  topic: string;
+  desired_result: string;
+  tags: string[];
+  status: SessionStatus;
+  recommended_minutes: number;
+  pause_count: number;
+  started_at: string;
+  completed_at?: string;
+}
+
+export interface SessionHistorySummary {
+  completed_count: number;
+  total_minutes: number;
+  average_minutes: number;
+}
+
+export interface SessionHistoryFilters {
+  period?: 'today' | 'week' | 'month' | 'all';
+  tags?: string[];
+  min_minutes?: number;
+  max_minutes?: number;
+  status?: 'completed' | 'abandoned' | 'all';
+  timezone?: string;
+  limit?: number;
 }
 
 export interface LeaderboardEntry {
@@ -94,6 +125,23 @@ const getAuthHeaders = (): Record<string, string> => {
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
 
+const normalizeSession = (session: any): FocusSession => {
+  const rawStatus = session?.status;
+  const status: SessionStatus = rawStatus === 'cancelled' ? 'abandoned' : rawStatus;
+  return {
+    ...session,
+    status,
+  };
+};
+
+const normalizeSessionResponse = <T extends { session?: any | null }>(data: T): T => {
+  if (!data?.session) return data;
+  return {
+    ...data,
+    session: normalizeSession(data.session),
+  };
+};
+
 export const api = {
   auth: {
     devLogin: async (email: string, name: string) => {
@@ -146,14 +194,21 @@ export const api = {
         body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error('Failed to start session');
-      return res.json();
+      return normalizeSessionResponse(await res.json());
+    },
+    active: async () => {
+      const res = await fetch(`${API_BASE_URL}/api/v1/sessions/active`, {
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) throw new Error('Failed to get active session');
+      return normalizeSessionResponse(await res.json());
     },
     get: async (sessionID: string) => {
       const res = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionID}`, {
         headers: getAuthHeaders(),
       });
       if (!res.ok) throw new Error('Failed to get session');
-      return res.json();
+      return normalizeSessionResponse(await res.json());
     },
     pause: async (sessionID: string) => {
       const res = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionID}/pause`, {
@@ -161,7 +216,7 @@ export const api = {
         headers: getAuthHeaders(),
       });
       if (!res.ok) throw new Error('Failed to pause session');
-      return res.json();
+      return normalizeSessionResponse(await res.json());
     },
     resume: async (sessionID: string) => {
       const res = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionID}/resume`, {
@@ -169,7 +224,7 @@ export const api = {
         headers: getAuthHeaders(),
       });
       if (!res.ok) throw new Error('Failed to resume session');
-      return res.json();
+      return normalizeSessionResponse(await res.json());
     },
     reset: async (sessionID: string) => {
       const res = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionID}/reset`, {
@@ -177,7 +232,7 @@ export const api = {
         headers: getAuthHeaders(),
       });
       if (!res.ok) throw new Error('Failed to reset session');
-      return res.json();
+      return normalizeSessionResponse(await res.json());
     },
     abandon: async (sessionID: string) => {
       const res = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionID}/abandon`, {
@@ -185,7 +240,7 @@ export const api = {
         headers: getAuthHeaders(),
       });
       if (!res.ok) throw new Error('Failed to abandon session');
-      return res.json();
+      return normalizeSessionResponse(await res.json());
     },
     complete: async (sessionID: string) => {
       const res = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionID}/complete`, {
@@ -193,7 +248,38 @@ export const api = {
         headers: getAuthHeaders(),
       });
       if (!res.ok) throw new Error('Failed to complete session');
-      return res.json();
+      return normalizeSessionResponse(await res.json());
+    },
+    history: async (filters?: SessionHistoryFilters) => {
+      const url = new URL(`${API_BASE_URL}/api/v1/sessions/history`);
+      if (filters?.period) url.searchParams.set('period', filters.period);
+      if (filters?.status) url.searchParams.set('status', filters.status);
+      if (filters?.timezone) url.searchParams.set('timezone', filters.timezone);
+      if (filters?.min_minutes && filters.min_minutes > 0) url.searchParams.set('min_minutes', String(filters.min_minutes));
+      if (filters?.max_minutes && filters.max_minutes > 0) url.searchParams.set('max_minutes', String(filters.max_minutes));
+      if (filters?.limit && filters.limit > 0) url.searchParams.set('limit', String(filters.limit));
+      if (filters?.tags && filters.tags.length > 0) {
+        const tagString = filters.tags.map((tag) => tag.trim()).filter(Boolean).join(',');
+        if (tagString) {
+          url.searchParams.set('tags', tagString);
+        }
+      }
+
+      const res = await fetch(url.toString(), {
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) throw new Error('Failed to get session history');
+      const data = await res.json();
+      const sessions: SessionHistoryEntry[] = Array.isArray(data?.sessions)
+        ? data.sessions.map((item: any) => ({
+            ...item,
+            status: item?.status === 'cancelled' ? 'abandoned' : item?.status,
+          }))
+        : [];
+      return {
+        sessions,
+        summary: data?.summary as SessionHistorySummary | undefined,
+      };
     },
     addInterruption: async (sessionID: string, reason: string) => {
       const res = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionID}/interruption`, {

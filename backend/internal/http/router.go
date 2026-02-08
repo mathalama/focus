@@ -31,6 +31,8 @@ func NewRouter(handler *handlers.Handler, corsOrigin string, jwtSecret string) *
 		api.GET("/goals/history", handler.ListGoalHistory)
 
 		api.POST("/sessions", handler.StartSession)
+		api.GET("/sessions/active", handler.GetActiveSession)
+		api.GET("/sessions/history", handler.ListSessionHistory)
 		api.GET("/sessions/:sessionID", handler.GetSession)
 		api.PATCH("/sessions/:sessionID/pause", handler.PauseSession)
 		api.PATCH("/sessions/:sessionID/resume", handler.ResumeSession)
