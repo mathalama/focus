@@ -36,6 +36,7 @@ type Repository interface {
 	ListItems(ctx context.Context) ([]domain.Item, error)
 	BuyItem(ctx context.Context, userID, itemID string) (domain.UserItem, error)
 	GetDailyActivity(ctx context.Context, userID string, timezone string) ([]domain.DailyActivity, error)
+	GetDailyContributions(ctx context.Context, userID string, timezone string, date string) ([]domain.DailyContribution, error)
 	GetRecentReflections(ctx context.Context, userID string, limit int) ([]domain.Reflection, error)
 }
 
@@ -432,6 +433,34 @@ func (h *Handler) GetDailyActivity(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"activity": activity})
+}
+
+func (h *Handler) GetDailyContributions(c *gin.Context) {
+	userID := middleware.UserID(c)
+	timezone := c.Query("timezone")
+	date := strings.TrimSpace(c.Query("date"))
+	if date == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "date is required (YYYY-MM-DD)"})
+		return
+	}
+
+	contributions, err := h.repo.GetDailyContributions(c.Request.Context(), userID, timezone, date)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load daily contributions"})
+		return
+	}
+
+	totalMinutes := 0
+	for _, item := range contributions {
+		totalMinutes += item.Minutes
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"date":          date,
+		"session_count": len(contributions),
+		"total_minutes": totalMinutes,
+		"contributions": contributions,
+	})
 }
 
 func (h *Handler) GetInsights(c *gin.Context) {

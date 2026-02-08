@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api, FocusSession } from '../lib/api';
 import { Button } from '../components/ui/Button';
@@ -10,10 +10,14 @@ export const SessionPage: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const [session, setSession] = useState<FocusSession | null>(null);
+  const sessionRef = useRef<FocusSession | null>(null);
   const [timeLeft, setTimeLeft] = useState(0); 
   const [breakTime, setBreakTime] = useState(0); // Local break timer in seconds
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Keep ref in sync with state
+  useEffect(() => { sessionRef.current = session; }, [session]);
 
   const syncTimeFromSession = useCallback((nextSession: FocusSession) => {
     const startDate = parseISO(nextSession.started_at);
@@ -37,13 +41,15 @@ export const SessionPage: React.FC = () => {
     setTimeLeft(nextSession.recommended_minutes * 60);
   }, []);
   
-  // Focus Timer
+  // Focus Timer — use ref to avoid tearing down interval on every poll
   useEffect(() => {
     if (!session || session.status !== 'active') return;
 
     const interval = setInterval(() => {
-      const startDate = parseISO(session.started_at);
-      const endDate = addMinutes(startDate, session.recommended_minutes);
+      const s = sessionRef.current;
+      if (!s || s.status !== 'active') return;
+      const startDate = parseISO(s.started_at);
+      const endDate = addMinutes(startDate, s.recommended_minutes);
       const diff = differenceInSeconds(endDate, new Date());
       
       if (diff <= 0) {
@@ -55,16 +61,17 @@ export const SessionPage: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [session]);
+  }, [session?.id, session?.status]);
 
   // Break Timer
+  const breakActive = breakTime > 0;
   useEffect(() => {
-    if (breakTime <= 0) return;
+    if (!breakActive) return;
     const interval = setInterval(() => {
       setBreakTime((prev) => Math.max(0, prev - 1));
     }, 1000);
     return () => clearInterval(interval);
-  }, [breakTime]);
+  }, [breakActive]);
 
   const fetchSession = useCallback(async (isInitialLoad = false) => {
     if (!sessionId) return;

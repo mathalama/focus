@@ -201,7 +201,7 @@ const CreateGoalForm: React.FC = () => {
                min={5}
                max={180}
                value={minutes}
-               onChange={e => setMinutes(parseInt(e.target.value))}
+               onChange={e => setMinutes(parseInt(e.target.value, 10) || 25)}
                className="font-mono text-xs bg-background border-border"
                required
              />

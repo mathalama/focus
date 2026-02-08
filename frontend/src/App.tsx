@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Layout } from './components/Layout';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -14,7 +15,11 @@ import { ProfilePage } from './pages/ProfilePage';
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, authChecked } = useAuth();
   if (!authChecked) {
-    return null;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background text-xs font-mono text-muted-foreground">
+        INITIALIZING...
+      </div>
+    );
   }
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -39,7 +44,7 @@ function App() {
             }>
               <Route index element={<DashboardPage />} />
               <Route path="hive" element={<HivePage />} />
-              <Route path="analytics" element={<AnalyticsPage />} />
+              <Route path="analytics" element={<ErrorBoundary><AnalyticsPage /></ErrorBoundary>} />
               <Route path="profile" element={<ProfilePage />} />
               <Route path="session/:sessionId" element={<SessionPage />} />
               <Route path="session/:sessionId/reflection" element={<ReflectionPage />} />

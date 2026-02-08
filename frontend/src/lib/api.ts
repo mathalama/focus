@@ -66,6 +66,15 @@ export interface DailyActivity {
   total_minutes: number;
 }
 
+export interface DailyContribution {
+  session_id: string;
+  goal_id: string;
+  topic: string;
+  minutes: number;
+  started_at: string;
+  completed_at?: string;
+}
+
 export interface AnalyticsOverview {
   completed_goals: number;
   calm_score: number;
@@ -220,6 +229,16 @@ export const api = {
         headers: getAuthHeaders(),
       });
       if (!res.ok) throw new Error('Failed to get activity');
+      return res.json();
+    },
+    day: async (date: string, timezone?: string) => {
+      const url = new URL(`${API_BASE_URL}/api/v1/analytics/activity/day`);
+      url.searchParams.append('date', date);
+      if (timezone) url.searchParams.append('timezone', timezone);
+      const res = await fetch(url.toString(), {
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) throw new Error('Failed to get daily contributions');
       return res.json();
     },
     insights: async () => {

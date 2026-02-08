@@ -851,6 +851,56 @@ func (r *Repository) GetDailyActivity(ctx context.Context, userID string, timezo
 	return activities, nil
 }
 
+func (r *Repository) GetDailyContributions(ctx context.Context, userID string, timezone string, date string) ([]domain.DailyContribution, error) {
+	if timezone == "" {
+		timezone = "UTC"
+	}
+
+	const query = `
+		SELECT
+			fs.id,
+			fs.goal_id,
+			COALESCE(g.topic, 'Unknown Goal') AS topic,
+			fs.recommended_minutes,
+			fs.started_at,
+			fs.completed_at
+		FROM focus_sessions fs
+		LEFT JOIN goals g ON g.id = fs.goal_id
+		WHERE fs.user_id = $1
+		  AND fs.status = 'completed'
+		  AND TO_CHAR(fs.started_at AT TIME ZONE $2, 'YYYY-MM-DD') = $3
+		ORDER BY fs.started_at DESC
+	`
+
+	rows, err := r.pool.Query(ctx, query, userID, timezone, date)
+	if err != nil {
+		return nil, fmt.Errorf("get daily contributions: %w", err)
+	}
+	defer rows.Close()
+
+	contributions := make([]domain.DailyContribution, 0)
+	for rows.Next() {
+		var item domain.DailyContribution
+		if err := rows.Scan(
+			&item.SessionID,
+			&item.GoalID,
+			&item.Topic,
+			&item.Minutes,
+			&item.StartedAt,
+			&item.CompletedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan daily contribution: %w", err)
+		}
+		contributions = append(contributions, item)
+	}
+
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("iterate daily contributions: %w", rows.Err())
+	}
+
+	return contributions, nil
+}
+
 func (r *Repository) GetRecentReflections(ctx context.Context, userID string, limit int) ([]domain.Reflection, error) {
 	const query = `
 		SELECT r.id, r.session_id, r.what_learned, r.what_was_hard, r.next_action, r.created_at

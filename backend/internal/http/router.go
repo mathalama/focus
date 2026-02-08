@@ -42,6 +42,7 @@ func NewRouter(handler *handlers.Handler, corsOrigin string, jwtSecret string) *
 
 		api.GET("/analytics/overview", handler.AnalyticsOverview)
 		api.GET("/analytics/activity", handler.GetDailyActivity)
+		api.GET("/analytics/activity/day", handler.GetDailyContributions)
 		api.GET("/analytics/insights", handler.GetInsights)
 
 		api.GET("/leaderboard", handler.GetLeaderboard)

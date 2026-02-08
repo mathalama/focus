@@ -12,14 +12,14 @@ type User struct {
 }
 
 type Goal struct {
-	ID                 string    `json:"id"`
-	UserID             string    `json:"user_id"`
-	Topic              string    `json:"topic"`
-	DesiredResult      string    `json:"desired_result"`
-	RecommendedMinutes int       `json:"recommended_minutes"`
-	Tags               []string  `json:"tags"`
+	ID                 string     `json:"id"`
+	UserID             string     `json:"user_id"`
+	Topic              string     `json:"topic"`
+	DesiredResult      string     `json:"desired_result"`
+	RecommendedMinutes int        `json:"recommended_minutes"`
+	Tags               []string   `json:"tags"`
 	CompletedAt        *time.Time `json:"completed_at"`
-	CreatedAt          time.Time `json:"created_at"`
+	CreatedAt          time.Time  `json:"created_at"`
 }
 
 type FocusSession struct {
@@ -62,6 +62,15 @@ type DailyActivity struct {
 	Date         string `json:"date"` // YYYY-MM-DD
 	SessionCount int    `json:"session_count"`
 	TotalMinutes int    `json:"total_minutes"`
+}
+
+type DailyContribution struct {
+	SessionID   string     `json:"session_id"`
+	GoalID      string     `json:"goal_id"`
+	Topic       string     `json:"topic"`
+	Minutes     int        `json:"minutes"`
+	StartedAt   time.Time  `json:"started_at"`
+	CompletedAt *time.Time `json:"completed_at"`
 }
 
 type Interruption struct {
