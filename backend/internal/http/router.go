@@ -20,11 +20,13 @@ func NewRouter(handler *handlers.Handler, corsOrigin string, jwtSecret string) *
 
 	router.GET("/health", handler.Health)
 	router.POST("/api/v1/auth/dev-login", handler.DevLogin)
+	router.POST("/api/v1/integrations/telegram/link", handler.TelegramLinkByCode)
 
 	api := router.Group("/api/v1")
 	api.Use(middleware.RequireUserID(jwtSecret))
 	{
 		api.GET("/me", handler.GetMe)
+		api.POST("/auth/telegram/link-code", handler.CreateTelegramLinkCode)
 
 		api.POST("/goals", handler.CreateGoal)
 		api.GET("/goals", handler.ListGoals)

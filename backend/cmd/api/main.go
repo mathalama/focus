@@ -32,7 +32,12 @@ func main() {
 	defer pool.Close()
 
 	repo := postgresql.New(pool, cfg.MaxSessionPauses)
-	handler := handlers.New(repo, cfg.JWTSecret)
+	handler := handlers.New(
+		repo,
+		cfg.JWTSecret,
+		time.Duration(cfg.TelegramLinkCodeTTLMinutes)*time.Minute,
+		cfg.TelegramBotAuthToken,
+	)
 	router := httpapi.NewRouter(handler, cfg.CorsOrigin, cfg.JWTSecret)
 
 	srv := &http.Server{

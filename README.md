@@ -29,6 +29,8 @@ focus/
       http/
       repository/postgresql/
     migrations/001_init.sql
+  telegram-bot/
+    cmd/bot/main.go
   frontend/
     src/
       lib/api.ts
@@ -75,6 +77,8 @@ Frontend default: `http://localhost:5173`
 - `DATABASE_URL=postgres://mathalama:mathalama@localhost:5432/mathalama?sslmode=disable`
 - `CORS_ORIGIN=http://localhost:5173`
 - `MAX_SESSION_PAUSES=3`
+- `TELEGRAM_BOT_AUTH_TOKEN=dev-telegram-bot-auth-change-me`
+- `TELEGRAM_LINK_CODE_TTL_MINUTES=10`
 
 ### Frontend (`frontend/.env`)
 
@@ -84,6 +88,8 @@ Frontend default: `http://localhost:5173`
 
 - `GET /health`
 - `POST /api/v1/auth/dev-login`
+- `POST /api/v1/auth/telegram/link-code` (Bearer)
+- `POST /api/v1/integrations/telegram/link` (`X-Telegram-Bot-Auth`)
 - `POST /api/v1/goals`
 - `GET /api/v1/goals`
 - `POST /api/v1/sessions`

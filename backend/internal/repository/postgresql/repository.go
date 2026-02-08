@@ -2,23 +2,28 @@ package postgresql
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"mathalama-focus/backend/internal/domain"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var (
-	ErrNotFound          = errors.New("resource not found")
-	ErrPauseLimitReached = errors.New("pause limit reached")
-	ErrInvalidState      = errors.New("session is in invalid state for this action")
-	ErrGoalCompleted     = errors.New("goal already completed")
+	ErrNotFound              = errors.New("resource not found")
+	ErrPauseLimitReached     = errors.New("pause limit reached")
+	ErrInvalidState          = errors.New("session is in invalid state for this action")
+	ErrGoalCompleted         = errors.New("goal already completed")
+	ErrTelegramCodeInvalid   = errors.New("telegram link code invalid or expired")
+	ErrTelegramAlreadyLinked = errors.New("telegram account already linked")
 )
 
 type Repository struct {
@@ -43,6 +48,14 @@ type ReflectionInput struct {
 	WhatLearned string
 	WhatWasHard string
 	NextAction  string
+}
+
+type TelegramLinkInput struct {
+	Code             string
+	TelegramUserID   int64
+	TelegramUsername string
+	TelegramFirst    string
+	TelegramLast     string
 }
 
 type SessionHistoryFilter struct {
@@ -103,6 +116,126 @@ func (r *Repository) DevLogin(ctx context.Context, email, name string) (domain.U
 		&user.CreatedAt,
 	); err != nil {
 		return domain.User{}, fmt.Errorf("upsert user: %w", err)
+	}
+
+	return user, nil
+}
+
+func (r *Repository) CreateTelegramLinkCode(ctx context.Context, userID string, ttl time.Duration) (string, time.Time, error) {
+	if ttl <= 0 {
+		ttl = 10 * time.Minute
+	}
+
+	expiresAt := time.Now().UTC().Add(ttl)
+
+	if _, err := r.pool.Exec(ctx, `DELETE FROM telegram_link_codes WHERE user_id = $1 OR expires_at <= NOW() OR used_at IS NOT NULL`, userID); err != nil {
+		return "", time.Time{}, fmt.Errorf("cleanup telegram link codes: %w", err)
+	}
+
+	const insertQuery = `
+		INSERT INTO telegram_link_codes (code, user_id, expires_at)
+		VALUES ($1, $2, $3)
+	`
+
+	for attempt := 0; attempt < 5; attempt++ {
+		code, err := generateTelegramLinkCode(8)
+		if err != nil {
+			return "", time.Time{}, fmt.Errorf("generate telegram link code: %w", err)
+		}
+
+		if _, err := r.pool.Exec(ctx, insertQuery, code, userID, expiresAt); err != nil {
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+				continue
+			}
+			return "", time.Time{}, fmt.Errorf("insert telegram link code: %w", err)
+		}
+
+		return code, expiresAt, nil
+	}
+
+	return "", time.Time{}, errors.New("failed to allocate unique telegram link code")
+}
+
+func (r *Repository) LinkTelegramByCode(ctx context.Context, input TelegramLinkInput) (domain.User, error) {
+	input.Code = strings.ToUpper(strings.TrimSpace(input.Code))
+	input.TelegramUsername = strings.TrimSpace(input.TelegramUsername)
+	input.TelegramFirst = strings.TrimSpace(input.TelegramFirst)
+	input.TelegramLast = strings.TrimSpace(input.TelegramLast)
+
+	if input.Code == "" || input.TelegramUserID <= 0 {
+		return domain.User{}, ErrTelegramCodeInvalid
+	}
+
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return domain.User{}, fmt.Errorf("begin telegram link tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	const codeQuery = `
+		SELECT user_id
+		FROM telegram_link_codes
+		WHERE code = $1
+		  AND used_at IS NULL
+		  AND expires_at > NOW()
+		FOR UPDATE
+	`
+
+	var userID string
+	if err := tx.QueryRow(ctx, codeQuery, input.Code).Scan(&userID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.User{}, ErrTelegramCodeInvalid
+		}
+		return domain.User{}, fmt.Errorf("find telegram link code: %w", err)
+	}
+
+	const upsertIdentityQuery = `
+		INSERT INTO telegram_identities (user_id, telegram_user_id, telegram_username, telegram_first_name, telegram_last_name)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (user_id) DO UPDATE SET
+			telegram_user_id = EXCLUDED.telegram_user_id,
+			telegram_username = EXCLUDED.telegram_username,
+			telegram_first_name = EXCLUDED.telegram_first_name,
+			telegram_last_name = EXCLUDED.telegram_last_name,
+			linked_at = NOW()
+	`
+
+	if _, err := tx.Exec(ctx, upsertIdentityQuery, userID, input.TelegramUserID, input.TelegramUsername, input.TelegramFirst, input.TelegramLast); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return domain.User{}, ErrTelegramAlreadyLinked
+		}
+		return domain.User{}, fmt.Errorf("upsert telegram identity: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `UPDATE telegram_link_codes SET used_at = NOW() WHERE code = $1`, input.Code); err != nil {
+		return domain.User{}, fmt.Errorf("mark telegram link code as used: %w", err)
+	}
+
+	const userQuery = `
+		SELECT id, email, name, nectar_balance, total_nectar_earned, created_at
+		FROM users
+		WHERE id = $1
+	`
+
+	var user domain.User
+	if err := tx.QueryRow(ctx, userQuery, userID).Scan(
+		&user.ID,
+		&user.Email,
+		&user.Name,
+		&user.NectarBalance,
+		&user.TotalNectarEarned,
+		&user.CreatedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.User{}, ErrNotFound
+		}
+		return domain.User{}, fmt.Errorf("read linked user: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return domain.User{}, fmt.Errorf("commit telegram link tx: %w", err)
 	}
 
 	return user, nil
@@ -1159,4 +1292,23 @@ func normalizeSessionStatus(session *domain.FocusSession) {
 	if session.Status == "cancelled" {
 		session.Status = "abandoned"
 	}
+}
+
+func generateTelegramLinkCode(length int) (string, error) {
+	const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+	if length <= 0 {
+		return "", errors.New("invalid code length")
+	}
+
+	buf := make([]byte, length)
+	randBytes := make([]byte, length)
+	if _, err := rand.Read(randBytes); err != nil {
+		return "", err
+	}
+
+	for i, b := range randBytes {
+		buf[i] = alphabet[int(b)%len(alphabet)]
+	}
+
+	return string(buf), nil
 }

@@ -1,6 +1,7 @@
 # Env files
 backend/.env
 frontend/.env
+telegram-bot/.env
 
 # Frontend
 frontend/node_modules

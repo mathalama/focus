@@ -2,10 +2,12 @@ package handlers
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"mathalama-focus/backend/internal/auth"
 	"mathalama-focus/backend/internal/domain"
@@ -20,6 +22,8 @@ import (
 type Repository interface {
 	GetUser(ctx context.Context, userID string) (domain.User, error)
 	DevLogin(ctx context.Context, email, name string) (domain.User, error)
+	CreateTelegramLinkCode(ctx context.Context, userID string, ttl time.Duration) (string, time.Time, error)
+	LinkTelegramByCode(ctx context.Context, input postgresql.TelegramLinkInput) (domain.User, error)
 	CreateGoal(ctx context.Context, userID string, input postgresql.CreateGoalInput) (domain.Goal, error)
 	ListGoals(ctx context.Context, userID string) ([]domain.Goal, error)
 	ListGoalHistory(ctx context.Context, userID string) ([]domain.Goal, error)
@@ -44,16 +48,22 @@ type Repository interface {
 }
 
 type Handler struct {
-	repo      Repository
-	jwtSecret string
+	repo                 Repository
+	jwtSecret            string
+	telegramLinkCodeTTL  time.Duration
+	telegramBotAuthToken string
 }
 
-func New(repo Repository, jwtSecret string) *Handler {
+func New(repo Repository, jwtSecret string, telegramLinkCodeTTL time.Duration, telegramBotAuthToken string) *Handler {
 	return &Handler{
-		repo:      repo,
-		jwtSecret: jwtSecret,
+		repo:                 repo,
+		jwtSecret:            jwtSecret,
+		telegramLinkCodeTTL:  telegramLinkCodeTTL,
+		telegramBotAuthToken: strings.TrimSpace(telegramBotAuthToken),
 	}
 }
+
+const telegramBotAuthHeader = "X-Telegram-Bot-Auth"
 
 func (h *Handler) Health(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
@@ -113,6 +123,85 @@ func (h *Handler) DevLogin(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"user":  user,
 		"token": token,
+	})
+}
+
+func (h *Handler) CreateTelegramLinkCode(c *gin.Context) {
+	userID := middleware.UserID(c)
+
+	code, expiresAt, err := h.repo.CreateTelegramLinkCode(c.Request.Context(), userID, h.telegramLinkCodeTTL)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create telegram link code"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"code":       code,
+		"expires_at": expiresAt.UTC(),
+	})
+}
+
+type telegramLinkByCodeRequest struct {
+	Code             string `json:"code"`
+	TelegramUserID   int64  `json:"telegram_user_id"`
+	TelegramUsername string `json:"telegram_username"`
+	TelegramFirst    string `json:"telegram_first_name"`
+	TelegramLast     string `json:"telegram_last_name"`
+}
+
+func (h *Handler) TelegramLinkByCode(c *gin.Context) {
+	if h.telegramBotAuthToken == "" {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "telegram integration is not configured"})
+		return
+	}
+
+	botAuthToken := strings.TrimSpace(c.GetHeader(telegramBotAuthHeader))
+	if subtle.ConstantTimeCompare([]byte(botAuthToken), []byte(h.telegramBotAuthToken)) != 1 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid bot auth token"})
+		return
+	}
+
+	var req telegramLinkByCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	req.Code = strings.ToUpper(strings.TrimSpace(req.Code))
+	req.TelegramUsername = strings.TrimSpace(req.TelegramUsername)
+	req.TelegramFirst = strings.TrimSpace(req.TelegramFirst)
+	req.TelegramLast = strings.TrimSpace(req.TelegramLast)
+	if req.Code == "" || req.TelegramUserID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "code and telegram_user_id are required"})
+		return
+	}
+
+	user, err := h.repo.LinkTelegramByCode(c.Request.Context(), postgresql.TelegramLinkInput{
+		Code:             req.Code,
+		TelegramUserID:   req.TelegramUserID,
+		TelegramUsername: req.TelegramUsername,
+		TelegramFirst:    req.TelegramFirst,
+		TelegramLast:     req.TelegramLast,
+	})
+	if errors.Is(err, postgresql.ErrTelegramCodeInvalid) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired code"})
+		return
+	}
+	if errors.Is(err, postgresql.ErrTelegramAlreadyLinked) {
+		c.JSON(http.StatusConflict, gin.H{"error": "telegram account is already linked to another user"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to link telegram account"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"linked_user": gin.H{
+			"id":    user.ID,
+			"name":  user.Name,
+			"email": user.Email,
+		},
 	})
 }
 

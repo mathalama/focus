@@ -18,6 +18,7 @@ export const SessionPage: React.FC = () => {
   const [breakTime, setBreakTime] = useState(0); // Local break timer in seconds
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   // Keep ref in sync with state
@@ -156,6 +157,7 @@ export const SessionPage: React.FC = () => {
   const handleAction = async (action: 'pause' | 'resume' | 'abandon' | 'complete' | 'reset') => {
     if (!sessionId) return;
     setActionLoading(true);
+    setActionError(null);
     try {
       let res;
       switch (action) {
@@ -186,6 +188,7 @@ export const SessionPage: React.FC = () => {
       syncTimeFromSession(res.session);
     } catch (err) {
       console.error(err);
+      setActionError(err instanceof Error ? err.message : 'Action failed. Check your connection.');
     } finally {
       setActionLoading(false);
     }
@@ -362,6 +365,12 @@ export const SessionPage: React.FC = () => {
            {isBreak && (
              <div className="mt-2 animate-in fade-in">
                <p className="text-xs text-muted-foreground font-mono mb-2">{t('session.breakActive')}</p>
+             </div>
+           )}
+
+           {actionError && (
+             <div className="mt-4 rounded border border-red-500/30 bg-red-950/20 px-4 py-2 text-xs font-mono text-red-400 animate-in fade-in">
+               {actionError}
              </div>
            )}
         </div>

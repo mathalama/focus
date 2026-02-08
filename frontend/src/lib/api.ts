@@ -120,6 +120,11 @@ export interface Insight {
   type: 'tip' | 'warning' | 'encouragement';
 }
 
+export interface TelegramLinkCode {
+  code: string;
+  expires_at: string;
+}
+
 const getAuthHeaders = (): Record<string, string> => {
   const token = localStorage.getItem('token');
   return token ? { 'Authorization': `Bearer ${token}` } : {};
@@ -158,6 +163,30 @@ export const api = {
         headers: getAuthHeaders(),
       });
       if (!res.ok) throw new Error('Failed to get user');
+      return res.json();
+    },
+    createTelegramLinkCode: async (): Promise<TelegramLinkCode> => {
+      const res = await fetch(`${API_BASE_URL}/api/v1/auth/telegram/link-code`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+      });
+
+      if (!res.ok) {
+        let message = 'Failed to generate Telegram code';
+        try {
+          const payload = await res.json();
+          if (typeof payload?.error === 'string' && payload.error.trim()) {
+            message = payload.error.trim();
+          }
+        } catch {
+          // Ignore non-JSON errors and keep fallback message.
+        }
+        throw new Error(message);
+      }
+
       return res.json();
     },
   },

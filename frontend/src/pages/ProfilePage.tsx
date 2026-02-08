@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { AppLanguage, useLanguage } from '../context/LanguageContext';
 import { Card } from '../components/ui/Card';
-import { Globe, UserRound } from 'lucide-react';
+import { Bell, Copy, Globe, LoaderCircle, UserRound } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
+import { api } from '../lib/api';
+import { Button } from '../components/ui/Button';
 
 const languageOptions: Array<{ value: AppLanguage; label: string }> = [
   { value: 'en', label: 'English' },
@@ -14,7 +16,77 @@ const languageOptions: Array<{ value: AppLanguage; label: string }> = [
 export const ProfilePage: React.FC = () => {
   const { user } = useAuth();
   const { language, setLanguage } = useLanguage();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const [telegramCode, setTelegramCode] = useState<{ code: string; expiresAt: string } | null>(null);
+  const [telegramNotice, setTelegramNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  const [isGeneratingCode, setIsGeneratingCode] = useState(false);
+  const [isCopyingCode, setIsCopyingCode] = useState(false);
+
+  const telegramExpiresLabel = useMemo(() => {
+    if (!telegramCode?.expiresAt) return '';
+
+    const parsedDate = new Date(telegramCode.expiresAt);
+    if (Number.isNaN(parsedDate.getTime())) {
+      return telegramCode.expiresAt;
+    }
+
+    return parsedDate.toLocaleString(locale, {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }, [telegramCode?.expiresAt, locale]);
+
+  const handleGenerateTelegramCode = async () => {
+    setIsGeneratingCode(true);
+    setTelegramNotice(null);
+    try {
+      const data = await api.auth.createTelegramLinkCode();
+      setTelegramCode({ code: data.code, expiresAt: data.expires_at });
+      setTelegramNotice({
+        tone: 'success',
+        text: t('profile.telegram.notice.generated'),
+      });
+    } catch (error) {
+      setTelegramNotice({
+        tone: 'error',
+        text: error instanceof Error && error.message.trim()
+          ? error.message
+          : t('profile.telegram.notice.generateFailed'),
+      });
+    } finally {
+      setIsGeneratingCode(false);
+    }
+  };
+
+  const handleCopyTelegramCommand = async () => {
+    if (!telegramCode?.code) return;
+
+    if (!navigator.clipboard || !window.isSecureContext) {
+      setTelegramNotice({
+        tone: 'error',
+        text: t('profile.telegram.notice.copyFailed'),
+      });
+      return;
+    }
+
+    setIsCopyingCode(true);
+    try {
+      await navigator.clipboard.writeText(`/link ${telegramCode.code}`);
+      setTelegramNotice({
+        tone: 'success',
+        text: t('profile.telegram.notice.copied'),
+      });
+    } catch {
+      setTelegramNotice({
+        tone: 'error',
+        text: t('profile.telegram.notice.copyFailed'),
+      });
+    } finally {
+      setIsCopyingCode(false);
+    }
+  };
 
   return (
     <div className="space-y-8 font-sans">
@@ -38,6 +110,73 @@ export const ProfilePage: React.FC = () => {
           <span>{t('profile.currentPoints', { points: user?.nectar_balance ?? 0 })}</span>
           <span>{t('profile.totalEarned', { points: user?.total_nectar_earned ?? 0 })}</span>
         </div>
+      </Card>
+
+      <Card className="border-border bg-surface p-6 shadow-none">
+        <div className="mb-4 flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#229ED9]/15 text-[#229ED9]">
+            <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" aria-hidden="true">
+              <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.587 7.896-1.97 9.289c-.149.658-.538.82-1.09.512l-3.012-2.222-1.453 1.397c-.161.161-.296.296-.605.296l.216-3.066 5.582-5.045c.243-.216-.054-.337-.378-.121l-6.902 4.347-2.972-.929c-.646-.203-.658-.646.135-.956l11.617-4.479c.54-.203 1.01.121.832.977z" />
+            </svg>
+          </div>
+          <div>
+            <h2 className="font-mono text-sm font-bold uppercase tracking-wide text-primary">{t('profile.telegram.title')}</h2>
+            <p className="text-xs text-muted-foreground">{t('profile.telegram.description')}</p>
+          </div>
+        </div>
+
+        <div className="mb-5 flex items-start gap-2 rounded-xl border border-border/70 bg-background/60 p-3 text-xs text-muted-foreground">
+          <Bell size={14} className="mt-[1px] text-accent" />
+          <p>{t('profile.telegram.notificationsHint')}</p>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <Button
+            onClick={handleGenerateTelegramCode}
+            disabled={isGeneratingCode}
+            className="min-w-[220px] gap-2"
+          >
+            {isGeneratingCode ? <LoaderCircle size={16} className="animate-spin" /> : null}
+            {isGeneratingCode ? t('profile.telegram.generating') : t('profile.telegram.generateCode')}
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={handleCopyTelegramCommand}
+            disabled={!telegramCode?.code || isCopyingCode}
+            className="gap-2"
+          >
+            {isCopyingCode ? <LoaderCircle size={16} className="animate-spin" /> : <Copy size={15} />}
+            {t('profile.telegram.copyCommand')}
+          </Button>
+        </div>
+
+        {telegramCode ? (
+          <div className="mt-4 rounded-xl border border-border bg-background p-4">
+            <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">
+              {t('profile.telegram.codeLabel')}
+            </p>
+            <p className="mt-1 text-xl font-bold tracking-[0.22em] text-primary">{telegramCode.code}</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {t('profile.telegram.expiresAt', { date: telegramExpiresLabel })}
+            </p>
+            <p className="mt-2 rounded-lg bg-surface px-3 py-2 font-mono text-xs text-accent">
+              {t('profile.telegram.commandHint', { command: `/link ${telegramCode.code}` })}
+            </p>
+          </div>
+        ) : null}
+
+        {telegramNotice ? (
+          <div
+            className={`mt-4 rounded-xl border px-4 py-3 text-sm ${
+              telegramNotice.tone === 'success'
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700'
+                : 'border-rose-500/30 bg-rose-500/10 text-rose-700'
+            }`}
+          >
+            {telegramNotice.text}
+          </div>
+        ) : null}
       </Card>
 
       <Card className="border-border bg-surface p-6 shadow-none">
