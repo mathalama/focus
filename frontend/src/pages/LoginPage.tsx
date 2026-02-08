@@ -6,8 +6,10 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Activity, ArrowRight } from 'lucide-react';
+import { useI18n } from '../lib/i18n';
 
 export const LoginPage: React.FC = () => {
+  const { t } = useI18n();
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
@@ -37,19 +39,19 @@ export const LoginPage: React.FC = () => {
           </div>
           <h1 className="text-xl font-bold tracking-tight font-mono uppercase">MathalamaFocus</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Enter the zone.
+            {t('login.subtitle')}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-1.5">
             <label htmlFor="email" className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Email
+              {t('login.email')}
             </label>
             <Input
               id="email"
               type="email"
-              placeholder="user@mathalama.com"
+              placeholder={t('login.placeholder.email')}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="bg-background border-border text-primary placeholder:text-muted/20"
@@ -60,12 +62,12 @@ export const LoginPage: React.FC = () => {
 
           <div className="space-y-1.5">
             <label htmlFor="name" className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Name
+              {t('login.name')}
             </label>
             <Input
               id="name"
               type="text"
-              placeholder="Your name"
+              placeholder={t('login.placeholder.name')}
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="bg-background border-border text-primary placeholder:text-muted/20"
@@ -79,7 +81,7 @@ export const LoginPage: React.FC = () => {
             size="md" 
             disabled={loading}
           >
-            <span>{loading ? 'Authenticating...' : 'Initialize Session'}</span>
+            <span>{loading ? t('login.authenticating') : t('login.initializeSession')}</span>
             {!loading && <ArrowRight size={16} />}
           </Button>
         </form>

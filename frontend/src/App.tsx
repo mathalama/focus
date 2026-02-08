@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
+import { useI18n } from './lib/i18n';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Layout } from './components/Layout';
 import { LoginPage } from './pages/LoginPage';
@@ -14,10 +15,11 @@ import { ProfilePage } from './pages/ProfilePage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, authChecked } = useAuth();
+  const { t } = useI18n();
   if (!authChecked) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background text-xs font-mono text-muted-foreground">
-        INITIALIZING...
+        {t('app.initializing')}
       </div>
     );
   }

@@ -6,8 +6,10 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { motion } from 'framer-motion';
+import { useI18n } from '../lib/i18n';
 
 export const ReflectionPage: React.FC = () => {
+  const { t } = useI18n();
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const { refreshUser } = useAuth();
@@ -44,18 +46,18 @@ export const ReflectionPage: React.FC = () => {
       >
         <Card className="p-8">
           <header className="mb-6 text-center">
-            <h1 className="text-2xl font-bold tracking-tight text-primary">Session Complete</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-primary">{t('reflection.title')}</h1>
             <p className="mt-2 text-muted-foreground">
-              Take a moment to reflect. This helps solidify your learning.
+              {t('reflection.subtitle')}
             </p>
           </header>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <label className="text-sm font-medium">What did you learn or accomplish?</label>
+              <label className="text-sm font-medium">{t('reflection.learned')}</label>
               <textarea
                 className="flex min-h-[80px] w-full rounded-xl border-2 border-transparent bg-secondary/50 px-4 py-3 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:border-primary/20 focus-visible:bg-surface transition-all resize-none"
-                placeholder="I learned how to..."
+                placeholder={t('reflection.learnedPlaceholder')}
                 value={learned}
                 onChange={e => setLearned(e.target.value)}
                 required
@@ -63,10 +65,10 @@ export const ReflectionPage: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">What was hard or distracting?</label>
+              <label className="text-sm font-medium">{t('reflection.hard')}</label>
               <textarea
                 className="flex min-h-[80px] w-full rounded-xl border-2 border-transparent bg-secondary/50 px-4 py-3 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:border-primary/20 focus-visible:bg-surface transition-all resize-none"
-                placeholder="I got stuck on..."
+                placeholder={t('reflection.hardPlaceholder')}
                 value={hard}
                 onChange={e => setHard(e.target.value)}
                 required
@@ -74,9 +76,9 @@ export const ReflectionPage: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Next action?</label>
+              <label className="text-sm font-medium">{t('reflection.next')}</label>
               <Input
-                placeholder="Next time I will..."
+                placeholder={t('reflection.nextPlaceholder')}
                 value={next}
                 onChange={e => setNext(e.target.value)}
                 required
@@ -84,7 +86,7 @@ export const ReflectionPage: React.FC = () => {
             </div>
 
             <Button type="submit" className="w-full" size="lg" disabled={loading}>
-              {loading ? 'Saving...' : 'Collect Nectar'}
+              {loading ? t('reflection.saving') : t('reflection.collect')}
             </Button>
           </form>
         </Card>

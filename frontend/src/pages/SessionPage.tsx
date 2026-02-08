@@ -5,8 +5,10 @@ import { Button } from '../components/ui/Button';
 import { Play, Pause, CheckCircle, AlertOctagon, Coffee, BatteryCharging } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { addMinutes, differenceInSeconds, parseISO } from 'date-fns';
+import { useI18n } from '../lib/i18n';
 
 export const SessionPage: React.FC = () => {
+  const { t } = useI18n();
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const [session, setSession] = useState<FocusSession | null>(null);
@@ -167,8 +169,8 @@ export const SessionPage: React.FC = () => {
     setBreakTime(minutes * 60);
   };
 
-  if (loading) return <div className="flex h-screen items-center justify-center font-mono text-xs">INITIALIZING...</div>;
-  if (!session) return <div className="flex h-screen items-center justify-center font-mono text-xs text-red-500">SESSION_NOT_FOUND</div>;
+  if (loading) return <div className="flex h-screen items-center justify-center font-mono text-xs">{t('session.initializing')}</div>;
+  if (!session) return <div className="flex h-screen items-center justify-center font-mono text-xs text-red-500">{t('session.notFound')}</div>;
 
   // Smart Break Logic
   const sessionsCompleted = parseInt(localStorage.getItem('completedSessionsCount') || '0', 10);
@@ -188,6 +190,12 @@ export const SessionPage: React.FC = () => {
   const progress = totalSeconds > 0 ? displayTime / totalSeconds : 0;
   const dashOffset = C * (1 - progress);
   const isBreak = breakTime > 0;
+  const statusLabelByStatus: Record<FocusSession['status'], string> = {
+    active: t('session.status.active'),
+    paused: t('session.status.paused'),
+    completed: t('session.status.completed'),
+    cancelled: t('session.status.cancelled'),
+  };
 
   return (
     <div className="flex min-h-[70vh] flex-col items-center justify-center font-sans text-primary">
@@ -230,14 +238,14 @@ export const SessionPage: React.FC = () => {
              </span>
              <span className="mt-4 flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-widest text-muted-foreground">
                <span className={`h-1.5 w-1.5 rounded-full ${isBreak ? 'bg-green-500 animate-pulse' : session.status === 'active' ? 'bg-accent animate-pulse' : 'bg-yellow-500'}`} />
-               {isBreak ? 'RECHARGING' : session.status}
+               {isBreak ? t('session.recharging') : statusLabelByStatus[session.status]}
              </span>
           </div>
         </div>
 
         <div className="mb-8 space-y-1">
-           <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Current Protocol</h2>
-           <p className="text-lg font-medium">{isBreak ? 'BREAK IN PROGRESS' : `${session.recommended_minutes} MIN FOCUS SESSION`}</p>
+           <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">{t('session.currentProtocol')}</h2>
+           <p className="text-lg font-medium">{isBreak ? t('session.breakInProgress') : t('session.focusSession', { minutes: session.recommended_minutes })}</p>
         </div>
 
         <div className="flex flex-col items-center gap-4">
@@ -251,7 +259,7 @@ export const SessionPage: React.FC = () => {
                    onClick={() => handleAction('reset')}
                    disabled={actionLoading}
                    className="h-10 w-10 rounded-full border border-border bg-surface hover:bg-surfaceHighlight"
-                   title="Reset Timer"
+                   title={t('session.resetTimer')}
                  >
                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
                  </Button>
@@ -275,7 +283,7 @@ export const SessionPage: React.FC = () => {
                    disabled={actionLoading}
                  >
                    <CheckCircle size={18} />
-                   Complete
+                   {t('session.complete')}
                  </Button>
                </>
              ) : (
@@ -285,7 +293,7 @@ export const SessionPage: React.FC = () => {
                   onClick={() => handleAction('resume')}
                   disabled={actionLoading}
                   className="h-14 w-14 rounded-full bg-accent text-accent-foreground hover:bg-white/90"
-                  title="Resume Focus"
+                  title={t('session.resumeFocus')}
                >
                   <Play size={20} fill="currentColor" />
                </Button>
@@ -297,7 +305,7 @@ export const SessionPage: React.FC = () => {
                 className="h-10 w-10 rounded-full text-muted-foreground hover:bg-red-950/30 hover:text-red-500"
                 onClick={() => handleAction('abandon')}
                 disabled={actionLoading}
-                title="Abandon Protocol"
+                title={t('session.abandonProtocol')}
              >
                 <AlertOctagon size={16} />
              </Button>
@@ -312,7 +320,7 @@ export const SessionPage: React.FC = () => {
                  onClick={() => startBreak(5)} 
                  className="font-mono text-xs gap-2"
                >
-                 <Coffee size={14} /> Short (5m)
+                 <Coffee size={14} /> {t('session.shortBreak')}
                </Button>
                <Button 
                  variant={isLongBreakDue ? "primary" : "outline"} 
@@ -321,14 +329,14 @@ export const SessionPage: React.FC = () => {
                  className="font-mono text-xs gap-2"
                >
                  <BatteryCharging size={14} /> 
-                 {isLongBreakDue ? "Suggested (15m)" : "Long (15m)"}
+                 {isLongBreakDue ? t('session.longBreakSuggested') : t('session.longBreak')}
                </Button>
              </div>
            )}
            
            {isBreak && (
              <div className="mt-2 animate-in fade-in">
-               <p className="text-xs text-muted-foreground font-mono mb-2">Break active. Click Resume to end early.</p>
+               <p className="text-xs text-muted-foreground font-mono mb-2">{t('session.breakActive')}</p>
              </div>
            )}
         </div>

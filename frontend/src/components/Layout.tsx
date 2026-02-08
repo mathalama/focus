@@ -4,18 +4,20 @@ import { useAuth } from '../context/AuthContext';
 import { LayoutDashboard, BarChart3, LogOut, Trophy, Activity, UserRound, Languages } from 'lucide-react';
 import { cn } from './ui/Button';
 import { useLanguage } from '../context/LanguageContext';
+import { useI18n } from '../lib/i18n';
 
 export const Layout: React.FC = () => {
   const { user, logout } = useAuth();
   const { language } = useLanguage();
+  const { t } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
 
   const navItems = [
-    { path: '/', label: 'Focus', icon: LayoutDashboard },
-    { path: '/hive', label: 'Leaderboard', icon: Trophy }, // Renamed from "The Hive"
-    { path: '/analytics', label: 'Analytics', icon: BarChart3 },
-    { path: '/profile', label: 'Profile', icon: UserRound },
+    { path: '/', label: t('layout.nav.focus'), icon: LayoutDashboard },
+    { path: '/hive', label: t('layout.nav.leaderboard'), icon: Trophy },
+    { path: '/analytics', label: t('layout.nav.analytics'), icon: BarChart3 },
+    { path: '/profile', label: t('layout.nav.profile'), icon: UserRound },
   ];
 
   const handleLogout = () => {
@@ -64,14 +66,14 @@ export const Layout: React.FC = () => {
               <div className="flex items-center gap-2 px-3 py-1 text-xs font-mono text-muted-foreground">
                 <span>{user.name.split(' ')[0]}</span>
                 <span className="text-border">|</span>
-                <span className="text-accent">{user.nectar_balance} pts</span>
+                <span className="text-accent">{t('layout.points', { points: user.nectar_balance })}</span>
               </div>
             )}
 
             <Link
               to="/profile"
               className="flex items-center gap-1 rounded px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-muted-foreground transition-colors hover:text-primary"
-              title="Language and profile settings"
+              title={t('layout.languageSettings')}
             >
               <Languages size={12} />
               {language}
@@ -80,7 +82,7 @@ export const Layout: React.FC = () => {
             <button
               onClick={handleLogout}
               className="text-muted-foreground hover:text-primary transition-colors"
-              title="Logout"
+              title={t('layout.logout')}
             >
               <LogOut size={16} />
             </button>

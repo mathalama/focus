@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { AppLanguage, useLanguage } from '../context/LanguageContext';
 import { Card } from '../components/ui/Card';
 import { Globe, UserRound } from 'lucide-react';
+import { useI18n } from '../lib/i18n';
 
 const languageOptions: Array<{ value: AppLanguage; label: string }> = [
   { value: 'en', label: 'English' },
@@ -13,12 +14,13 @@ const languageOptions: Array<{ value: AppLanguage; label: string }> = [
 export const ProfilePage: React.FC = () => {
   const { user } = useAuth();
   const { language, setLanguage } = useLanguage();
+  const { t } = useI18n();
 
   return (
     <div className="space-y-8 font-sans">
       <header className="border-b border-border pb-4">
-        <h1 className="text-2xl font-bold tracking-tight font-mono uppercase text-primary">Profile</h1>
-        <p className="mt-1 text-sm font-mono text-muted-foreground">// USER PREFERENCES</p>
+        <h1 className="text-2xl font-bold tracking-tight font-mono uppercase text-primary">{t('profile.title')}</h1>
+        <p className="mt-1 text-sm font-mono text-muted-foreground">{t('profile.subtitle')}</p>
       </header>
 
       <Card className="border-border bg-surface p-6 shadow-none">
@@ -33,19 +35,19 @@ export const ProfilePage: React.FC = () => {
         </div>
 
         <div className="grid gap-2 text-xs font-mono text-muted-foreground sm:grid-cols-2">
-          <span>Current points: {user?.nectar_balance ?? 0}</span>
-          <span>Total earned: {user?.total_nectar_earned ?? 0}</span>
+          <span>{t('profile.currentPoints', { points: user?.nectar_balance ?? 0 })}</span>
+          <span>{t('profile.totalEarned', { points: user?.total_nectar_earned ?? 0 })}</span>
         </div>
       </Card>
 
       <Card className="border-border bg-surface p-6 shadow-none">
         <div className="mb-4 flex items-center gap-2">
           <Globe size={16} className="text-accent" />
-          <h2 className="font-mono text-sm font-bold uppercase tracking-wide text-primary">Language</h2>
+          <h2 className="font-mono text-sm font-bold uppercase tracking-wide text-primary">{t('profile.language')}</h2>
         </div>
 
         <label className="mb-2 block text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
-          Interface language (placeholder)
+          {t('profile.interfaceLanguage')}
         </label>
         <select
           value={language}
@@ -60,10 +62,9 @@ export const ProfilePage: React.FC = () => {
         </select>
 
         <p className="mt-3 text-xs text-muted-foreground">
-          Full UI translations will be added next. Current switch stores language preference and is ready for localization rollout.
+          {t('profile.rollout')}
         </p>
       </Card>
     </div>
   );
 };
-

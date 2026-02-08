@@ -4,8 +4,10 @@ import { Card } from '../components/ui/Card';
 import { useAuth } from '../context/AuthContext';
 import { cn } from '../components/ui/Button';
 import { Trophy } from 'lucide-react';
+import { useI18n } from '../lib/i18n';
 
 export const HivePage: React.FC = () => {
+  const { t } = useI18n();
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
@@ -17,14 +19,14 @@ export const HivePage: React.FC = () => {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="text-xs font-mono text-muted-foreground">LOADING DATA...</div>;
+  if (loading) return <div className="text-xs font-mono text-muted-foreground">{t('hive.loading')}</div>;
 
   return (
     <div className="space-y-6">
       <header className="border-b border-border pb-4">
-        <h1 className="text-2xl font-bold tracking-tight font-mono uppercase text-primary">Leaderboard</h1>
+        <h1 className="text-2xl font-bold tracking-tight font-mono uppercase text-primary">{t('hive.title')}</h1>
         <p className="text-sm text-muted-foreground font-mono mt-1">
-          // TOP PERFORMERS
+          {t('hive.subtitle')}
         </p>
       </header>
 
@@ -33,9 +35,9 @@ export const HivePage: React.FC = () => {
           <table className="w-full text-left text-sm font-mono">
             <thead className="bg-surfaceHighlight text-xs uppercase text-muted-foreground">
               <tr>
-                <th className="px-6 py-3 font-medium tracking-wider">Rank</th>
-                <th className="px-6 py-3 font-medium tracking-wider">User</th>
-                <th className="px-6 py-3 font-medium tracking-wider text-right">Points</th>
+                <th className="px-6 py-3 font-medium tracking-wider">{t('hive.rank')}</th>
+                <th className="px-6 py-3 font-medium tracking-wider">{t('hive.user')}</th>
+                <th className="px-6 py-3 font-medium tracking-wider text-right">{t('hive.points')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -61,7 +63,7 @@ export const HivePage: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 font-medium text-primary">
                     {entry.name}
-                    {entry.user_id === user?.id && <span className="ml-2 text-[10px] text-accent uppercase tracking-wider">[YOU]</span>}
+                    {entry.user_id === user?.id && <span className="ml-2 text-[10px] text-accent uppercase tracking-wider">{t('hive.you')}</span>}
                   </td>
                   <td className="px-6 py-4 text-right font-bold text-accent">
                     {entry.total_nectar_earned.toLocaleString()}

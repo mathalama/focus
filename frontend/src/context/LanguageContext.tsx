@@ -9,7 +9,7 @@ interface LanguageContextType {
 
 const LANGUAGE_STORAGE_KEY = 'app_language';
 
-const getInitialLanguage = (): AppLanguage => {
+export const getInitialLanguage = (): AppLanguage => {
   const stored = localStorage.getItem(LANGUAGE_STORAGE_KEY);
   if (stored === 'ru' || stored === 'kk' || stored === 'en') {
     return stored;
@@ -39,4 +39,3 @@ export const useLanguage = () => {
   }
   return context;
 };
-

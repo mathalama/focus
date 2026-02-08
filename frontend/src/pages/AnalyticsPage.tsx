@@ -3,6 +3,7 @@ import { api, AnalyticsOverview, DailyActivity, DailyContribution } from '../lib
 import { Card } from '../components/ui/Card';
 import { Target, Zap, Activity, Award } from 'lucide-react';
 import { addDays, differenceInCalendarDays, eachDayOfInterval, format, startOfWeek, subDays } from 'date-fns';
+import { getLocale, useI18n } from '../lib/i18n';
 
 interface DayDetails {
   date: string;
@@ -21,6 +22,7 @@ interface HoverTooltip {
 }
 
 export const AnalyticsPage: React.FC = () => {
+  const { t } = useI18n();
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
   const [activity, setActivity] = useState<DailyActivity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,7 +39,7 @@ export const AnalyticsPage: React.FC = () => {
       .finally(() => setLoading(false));
   }, [timezone]);
 
-  if (loading) return <div className="text-xs font-mono text-muted-foreground">LOADING ANALYTICS...</div>;
+  if (loading) return <div className="text-xs font-mono text-muted-foreground">{t('analytics.loading')}</div>;
 
   // All date grid computations are done once per activity change (stable dep)
   return <AnalyticsContent overview={overview} activity={activity} />;
@@ -51,6 +53,7 @@ const AnalyticsContent: React.FC<{
   overview: AnalyticsOverview | null;
   activity: DailyActivity[];
 }> = ({ overview, activity }) => {
+  const { language, t } = useI18n();
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [dayDetails, setDayDetails] = useState<DayDetails | null>(null);
   const [dayDetailsLoading, setDayDetailsLoading] = useState(false);
@@ -127,7 +130,7 @@ const AnalyticsContent: React.FC<{
 
   const formatLongDate = (dateKey: string) => {
     const parsed = new Date(`${dateKey}T00:00:00`);
-    return parsed.toLocaleDateString(undefined, {
+    return parsed.toLocaleDateString(getLocale(language), {
       weekday: 'long',
       month: 'short',
       day: 'numeric',
@@ -199,9 +202,9 @@ const AnalyticsContent: React.FC<{
   return (
     <div className="space-y-8 font-sans relative">
       <header className="border-b border-border pb-4">
-        <h1 className="text-2xl font-bold tracking-tight font-mono uppercase text-primary">Analytics</h1>
+        <h1 className="text-2xl font-bold tracking-tight font-mono uppercase text-primary">{t('analytics.title')}</h1>
         <p className="text-sm text-muted-foreground font-mono mt-1">
-          // PERFORMANCE METRICS
+          {t('analytics.subtitle')}
         </p>
       </header>
 
@@ -209,24 +212,24 @@ const AnalyticsContent: React.FC<{
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard 
           icon={Target} 
-          label="Objectives Done" 
+          label={t('analytics.objectivesDone')} 
           value={overview?.completed_goals ?? 0} 
         />
         <StatCard 
           icon={Zap} 
-          label="Focus Score" 
+          label={t('analytics.focusScore')} 
           value={overview?.calm_score ?? 0} 
           suffix="/ 100"
         />
         <StatCard 
           icon={Activity} 
-          label="Stability" 
+          label={t('analytics.stability')} 
           value={overview?.focus_stability ?? 0} 
           suffix="%"
         />
         <StatCard 
           icon={Award} 
-          label="Total Points" 
+          label={t('analytics.totalPoints')} 
           value={overview?.total_nectar_earned ?? 0} 
           className="text-accent"
         />
@@ -234,7 +237,7 @@ const AnalyticsContent: React.FC<{
 
       {/* Heatmap */}
       <Card className="bg-surface border-border shadow-none">
-        <h2 className="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">Activity Log (Last 12 Months)</h2>
+        <h2 className="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('analytics.activityLog')}</h2>
         <div className="overflow-x-auto pb-1">
           <div className="w-max">
             <div className="mb-2 ml-8 relative h-4" style={{ width: `${gridPixelWidth}px` }}>
@@ -280,7 +283,7 @@ const AnalyticsContent: React.FC<{
                           onMouseMove={onCellMouseMove}
                           onMouseLeave={onCellMouseLeave}
                           className={`appearance-none border-0 p-0 h-2.5 w-2.5 rounded-[2px] transition-all hover:ring-1 hover:ring-accent/70 ${intensityClass(totalMinutes, inRange)} ${isSelected ? 'ring-1 ring-accent' : ''}`}
-                          aria-label={`${dateKey}: ${sessionCount} contributions`}
+                          aria-label={`${dateKey}: ${t('analytics.contributions', { count: sessionCount })}`}
                         />
                       );
                     })}
@@ -292,7 +295,7 @@ const AnalyticsContent: React.FC<{
         </div>
 
         <div className="mt-4 flex items-center justify-end gap-2 text-[10px] font-mono uppercase text-muted-foreground">
-          <span>Less</span>
+          <span>{t('analytics.less')}</span>
           <div className="flex gap-1">
             <div className="h-2.5 w-2.5 rounded-[2px] bg-secondary" />
             <div className="h-2.5 w-2.5 rounded-[2px] bg-zinc-700" />
@@ -300,28 +303,28 @@ const AnalyticsContent: React.FC<{
             <div className="h-2.5 w-2.5 rounded-[2px] bg-zinc-500" />
             <div className="h-2.5 w-2.5 rounded-[2px] bg-zinc-400" />
           </div>
-          <span>More</span>
+          <span>{t('analytics.more')}</span>
         </div>
       </Card>
 
       <Card className="bg-surface border-border shadow-none">
-        <h2 className="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">Day History</h2>
+        <h2 className="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('analytics.dayHistory')}</h2>
         {!selectedDate ? (
-          <p className="text-sm text-muted-foreground">Click any day in the heatmap to see what you completed on that date.</p>
+          <p className="text-sm text-muted-foreground">{t('analytics.dayHistoryHint')}</p>
         ) : dayDetailsLoading ? (
-          <p className="text-sm text-muted-foreground">Loading day details...</p>
+          <p className="text-sm text-muted-foreground">{t('analytics.loadingDay')}</p>
         ) : (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2 text-xs font-mono uppercase tracking-wider text-muted-foreground">
               <span>{formatLongDate(selectedDate)}</span>
               <span>•</span>
-              <span>{dayDetails?.session_count ?? 0} contributions</span>
+              <span>{t('analytics.contributions', { count: dayDetails?.session_count ?? 0 })}</span>
               <span>•</span>
-              <span>{dayDetails?.total_minutes ?? 0} min</span>
+              <span>{t('analytics.minutesShort', { minutes: dayDetails?.total_minutes ?? 0 })}</span>
             </div>
 
             {!dayDetails || dayDetails.contributions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No completed sessions on this day.</p>
+              <p className="text-sm text-muted-foreground">{t('analytics.noDayData')}</p>
             ) : (
               <div className="grid gap-2">
                 {dayDetails.contributions.map((item) => (
@@ -329,10 +332,10 @@ const AnalyticsContent: React.FC<{
                     <div className="min-w-0">
                       <p className="truncate text-xs font-mono font-bold uppercase tracking-wide text-primary">{item.topic}</p>
                       <p className="text-[11px] text-muted-foreground">
-                        {new Date(item.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(item.started_at).toLocaleTimeString(getLocale(language), { hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
-                    <span className="ml-3 text-xs font-mono uppercase text-muted-foreground">{item.minutes} min</span>
+                    <span className="ml-3 text-xs font-mono uppercase text-muted-foreground">{t('analytics.minutesShort', { minutes: item.minutes })}</span>
                   </div>
                 ))}
               </div>
@@ -346,9 +349,9 @@ const AnalyticsContent: React.FC<{
           className="pointer-events-none fixed z-50 rounded-md border border-border bg-surface px-3 py-2 text-xs font-mono text-primary shadow-lg"
           style={{ left: tooltip.x + 12, top: tooltip.y + 12 }}
         >
-          <p>{tooltip.sessionCount} contributions</p>
+          <p>{t('analytics.contributions', { count: tooltip.sessionCount })}</p>
           <p className="text-muted-foreground">{formatLongDate(tooltip.date)}</p>
-          <p className="text-muted-foreground">{tooltip.totalMinutes} min</p>
+          <p className="text-muted-foreground">{t('analytics.minutesShort', { minutes: tooltip.totalMinutes })}</p>
         </div>
       )}
     </div>
