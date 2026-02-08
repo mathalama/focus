@@ -8,13 +8,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func NewRouter(handler *handlers.Handler, corsOrigin string) *gin.Engine {
+func NewRouter(handler *handlers.Handler, corsOrigin string, jwtSecret string) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Logger(), gin.Recovery())
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{corsOrigin},
 		AllowMethods:     []string{"GET", "POST", "PATCH", "OPTIONS"},
-		AllowHeaders:     []string{"Content-Type", "X-User-ID"},
+		AllowHeaders:     []string{"Content-Type", "Authorization"},
 		AllowCredentials: true,
 	}))
 
@@ -22,7 +22,7 @@ func NewRouter(handler *handlers.Handler, corsOrigin string) *gin.Engine {
 	router.POST("/api/v1/auth/dev-login", handler.DevLogin)
 
 	api := router.Group("/api/v1")
-	api.Use(middleware.RequireUserID())
+	api.Use(middleware.RequireUserID(jwtSecret))
 	{
 		api.POST("/goals", handler.CreateGoal)
 		api.GET("/goals", handler.ListGoals)

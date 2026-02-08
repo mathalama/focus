@@ -10,6 +10,7 @@ type Config struct {
 	Port             string
 	DatabaseURL      string
 	CorsOrigin       string
+	JWTSecret        string
 	MaxSessionPauses int
 }
 
@@ -18,6 +19,7 @@ func Load() (Config, error) {
 		Port:             envOrDefault("PORT", "8080"),
 		DatabaseURL:      os.Getenv("DATABASE_URL"),
 		CorsOrigin:       envOrDefault("CORS_ORIGIN", "http://localhost:5173"),
+		JWTSecret:        envOrDefault("JWT_SECRET", "dev-secret-change-me"),
 		MaxSessionPauses: intOrDefault("MAX_SESSION_PAUSES", 3),
 	}
 

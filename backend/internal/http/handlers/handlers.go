@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"mathalama-focus/backend/internal/auth"
 	"mathalama-focus/backend/internal/domain"
 	"mathalama-focus/backend/internal/http/middleware"
 	"mathalama-focus/backend/internal/repository/postgresql"
@@ -28,11 +29,15 @@ type Repository interface {
 }
 
 type Handler struct {
-	repo Repository
+	repo      Repository
+	jwtSecret string
 }
 
-func New(repo Repository) *Handler {
-	return &Handler{repo: repo}
+func New(repo Repository, jwtSecret string) *Handler {
+	return &Handler{
+		repo:      repo,
+		jwtSecret: jwtSecret,
+	}
 }
 
 func (h *Handler) Health(c *gin.Context) {
@@ -68,7 +73,16 @@ func (h *Handler) DevLogin(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"user": user})
+	token, err := auth.GenerateToken(h.jwtSecret, user.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"user":  user,
+		"token": token,
+	})
 }
 
 type createGoalRequest struct {

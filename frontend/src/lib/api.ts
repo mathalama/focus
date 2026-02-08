@@ -7,7 +7,7 @@ type Method = 'GET' | 'POST' | 'PATCH';
 interface ApiOptions {
   method?: Method;
   body?: unknown;
-  userID?: string;
+  token?: string;
 }
 
 async function request<T>(path: string, options: ApiOptions = {}): Promise<T> {
@@ -15,8 +15,8 @@ async function request<T>(path: string, options: ApiOptions = {}): Promise<T> {
     'Content-Type': 'application/json'
   };
 
-  if (options.userID) {
-    headers['X-User-ID'] = options.userID;
+  if (options.token) {
+    headers['Authorization'] = `Bearer ${options.token}`;
   }
 
   const response = await fetch(`${API_BASE}${path}`, {
@@ -35,91 +35,91 @@ async function request<T>(path: string, options: ApiOptions = {}): Promise<T> {
   return payload as T;
 }
 
-export async function devLogin(email: string, name: string): Promise<User> {
-  const response = await request<{ user: User }>('/api/v1/auth/dev-login', {
+export async function devLogin(email: string, name: string): Promise<{ user: User; token: string }> {
+  const response = await request<{ user: User; token: string }>('/api/v1/auth/dev-login', {
     method: 'POST',
     body: { email, name }
   });
-  return response.user;
+  return response;
 }
 
-export async function listGoals(userID: string): Promise<Goal[]> {
-  const response = await request<{ goals: Goal[] }>('/api/v1/goals', { userID });
+export async function listGoals(token: string): Promise<Goal[]> {
+  const response = await request<{ goals: Goal[] }>('/api/v1/goals', { token });
   return response.goals;
 }
 
 export async function createGoal(
-  userID: string,
+  token: string,
   payload: { topic: string; desired_result: string; recommended_minutes: number }
 ): Promise<Goal> {
   const response = await request<{ goal: Goal }>('/api/v1/goals', {
     method: 'POST',
     body: payload,
-    userID
+    token
   });
   return response.goal;
 }
 
 export async function startSession(
-  userID: string,
+  token: string,
   payload: { goal_id: string; recommended_minutes: number }
 ): Promise<FocusSession> {
   const response = await request<{ session: FocusSession }>('/api/v1/sessions', {
     method: 'POST',
     body: payload,
-    userID
+    token
   });
   return response.session;
 }
 
-export async function pauseSession(userID: string, sessionID: string): Promise<FocusSession> {
+export async function pauseSession(token: string, sessionID: string): Promise<FocusSession> {
   const response = await request<{ session: FocusSession }>(`/api/v1/sessions/${sessionID}/pause`, {
     method: 'PATCH',
-    userID
+    token
   });
   return response.session;
 }
 
-export async function resumeSession(userID: string, sessionID: string): Promise<FocusSession> {
+export async function resumeSession(token: string, sessionID: string): Promise<FocusSession> {
   const response = await request<{ session: FocusSession }>(`/api/v1/sessions/${sessionID}/resume`, {
     method: 'PATCH',
-    userID
+    token
   });
   return response.session;
 }
 
-export async function completeSession(userID: string, sessionID: string): Promise<FocusSession> {
+export async function completeSession(token: string, sessionID: string): Promise<FocusSession> {
   const response = await request<{ session: FocusSession }>(`/api/v1/sessions/${sessionID}/complete`, {
     method: 'PATCH',
-    userID
+    token
   });
   return response.session;
 }
 
-export async function addInterruption(userID: string, sessionID: string, reason: string): Promise<void> {
+export async function addInterruption(token: string, sessionID: string, reason: string): Promise<void> {
   await request(`/api/v1/sessions/${sessionID}/interruption`, {
     method: 'POST',
-    userID,
+    token,
     body: { reason }
   });
 }
 
 export async function saveReflection(
-  userID: string,
+  token: string,
   sessionID: string,
   payload: { what_learned: string; what_was_hard: string; next_action: string }
 ): Promise<Reflection> {
   const response = await request<{ reflection: Reflection }>(`/api/v1/sessions/${sessionID}/reflection`, {
     method: 'POST',
-    userID,
+    token,
     body: payload
   });
   return response.reflection;
 }
 
-export async function getOverview(userID: string): Promise<AnalyticsOverview> {
+export async function getOverview(token: string): Promise<AnalyticsOverview> {
   const response = await request<{ overview: AnalyticsOverview }>('/api/v1/analytics/overview', {
-    userID
+    token
   });
   return response.overview;
 }

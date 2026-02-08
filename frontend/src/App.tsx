@@ -15,7 +15,7 @@ import type { AnalyticsOverview, FocusSession, Goal, User } from './types';
 
 const USER_KEY = 'mathalama_focus_user';
 
-type StoredUser = Pick<User, 'id' | 'email' | 'name'>;
+type StoredUser = Pick<User, 'id' | 'email' | 'name'> & { token: string };
 
 function formatClock(seconds: number): string {
   const safe = Math.max(seconds, 0);
@@ -73,7 +73,7 @@ export default function App() {
       return;
     }
 
-    void loadDashboard(user.id);
+    void loadDashboard(user.token);
   }, [user]);
 
   useEffect(() => {
@@ -104,9 +104,9 @@ export default function App() {
     return 'Recovering';
   }, [overview.calm_score]);
 
-  async function loadDashboard(userID: string) {
+  async function loadDashboard(token: string) {
     try {
-      const [goalList, summary] = await Promise.all([listGoals(userID), getOverview(userID)]);
+      const [goalList, summary] = await Promise.all([listGoals(token), getOverview(token)]);
       setGoals(goalList);
       setOverview(summary);
     } catch (err) {
@@ -121,8 +121,8 @@ export default function App() {
     setIsLoading(true);
 
     try {
-      const account = await devLogin(email.trim(), name.trim());
-      const persistedUser = { id: account.id, email: account.email, name: account.name };
+      const { user: account, token } = await devLogin(email.trim(), name.trim());
+      const persistedUser = { id: account.id, email: account.email, name: account.name, token };
       localStorage.setItem(USER_KEY, JSON.stringify(persistedUser));
       setUser(persistedUser);
       setMessage('Dev login ready. You can start focus sessions.');
@@ -142,7 +142,7 @@ export default function App() {
     setIsLoading(true);
 
     try {
-      const goal = await createGoal(user.id, {
+      const goal = await createGoal(user.token, {
         topic: topic.trim(),
         desired_result: desiredResult.trim(),
         recommended_minutes: modeMinutes
@@ -165,7 +165,7 @@ export default function App() {
     setIsLoading(true);
 
     try {
-      const session = await startSession(user.id, {
+      const session = await startSession(user.token, {
         goal_id: goal.id,
         recommended_minutes: modeMinutes
       });
@@ -191,11 +191,11 @@ export default function App() {
 
     try {
       if (activeSession.status === 'active') {
-        const session = await pauseSession(user.id, activeSession.id);
+        const session = await pauseSession(user.token, activeSession.id);
         setActiveSession(session);
         setMessage('Session paused.');
       } else if (activeSession.status === 'paused') {
-        const session = await resumeSession(user.id, activeSession.id);
+        const session = await resumeSession(user.token, activeSession.id);
         setActiveSession(session);
         setMessage('Session resumed.');
       }
@@ -214,7 +214,7 @@ export default function App() {
     setIsLoading(true);
 
     try {
-      await addInterruption(user.id, activeSession.id, 'context switch');
+      await addInterruption(user.token, activeSession.id, 'context switch');
       setMessage('Interruption logged without resetting progress.');
     } catch (err) {
       setError((err as Error).message);
@@ -231,10 +231,10 @@ export default function App() {
     setIsLoading(true);
 
     try {
-      const session = await completeSession(user.id, activeSession.id);
+      const session = await completeSession(user.token, activeSession.id);
       setActiveSession(session);
       setMessage('Session completed. Reflection is required.');
-      await loadDashboard(user.id);
+      await loadDashboard(user.token);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -251,14 +251,14 @@ export default function App() {
     setIsLoading(true);
 
     try {
-      await saveReflection(user.id, activeSession.id, {
+      await saveReflection(user.token, activeSession.id, {
         what_learned: whatLearned.trim(),
         what_was_hard: whatWasHard.trim(),
         next_action: nextAction.trim()
       });
       setActiveSession(null);
       setRemainingSeconds(0);
-      await loadDashboard(user.id);
+      await loadDashboard(user.token);
       setMessage('Reflection saved. Session closed calmly.');
     } catch (err) {
       setError((err as Error).message);

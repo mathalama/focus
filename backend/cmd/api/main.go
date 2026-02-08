@@ -32,8 +32,8 @@ func main() {
 	defer pool.Close()
 
 	repo := postgresql.New(pool, cfg.MaxSessionPauses)
-	handler := handlers.New(repo)
-	router := httpapi.NewRouter(handler, cfg.CorsOrigin)
+	handler := handlers.New(repo, cfg.JWTSecret)
+	router := httpapi.NewRouter(handler, cfg.CorsOrigin, cfg.JWTSecret)
 
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%s", cfg.Port),

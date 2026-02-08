@@ -97,5 +97,5 @@ Frontend default: `http://localhost:5173`
 ## Notes
 
 - Auth in this scaffold is dev-mode (`/auth/dev-login`) that returns a user ID.
-- Protected endpoints require header: `X-User-ID`.
+- Protected endpoints require header: `Authorization: Bearer <jwt_token>`.
 - Reflection is mandatory in the UI after session completion.
