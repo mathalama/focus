@@ -1,4 +1,4 @@
-# Mathalama Focus
+222222# Mathalama Focus
 
 Calm-first learning focus mode, not a productivity pressure timer.
 
@@ -72,7 +72,7 @@ Frontend default: `http://localhost:5173`
 ### Backend (`backend/.env`)
 
 - `PORT=8080`
-- `DATABASE_URL=postgres://focus:focus@localhost:5432/focus?sslmode=disable`
+- `DATABASE_URL=postgres://mathalama:mathalama@localhost:5432/mathalama?sslmode=disable`
 - `CORS_ORIGIN=http://localhost:5173`
 - `MAX_SESSION_PAUSES=3`
 
@@ -99,3 +99,25 @@ Frontend default: `http://localhost:5173`
 - Auth in this scaffold is dev-mode (`/auth/dev-login`) that returns a user ID.
 - Protected endpoints require header: `Authorization: Bearer <jwt_token>`.
 - Reflection is mandatory in the UI after session completion.
+
+## Roadmap: Evolution to BeeFocus
+
+We aim to transform this MVP into a fully gamified "BeeFocus" experience.
+
+### 1. Gamification (The Hive)
+- **Nectar Currency:** Earn nectar for every minute of focused work.
+- **Save the Bees:** Use nectar to collect different bee species or upgrade your virtual hive.
+- **Loss Aversion:** If a session is abandoned, the gathered nectar is lost.
+
+### 2. Audio & Atmosphere
+- **Soundscapes:** Integrated background noises (Rain, Forest, Cafe, White Noise).
+- **Visual Themes:** Day/Night cycle in the hive view.
+
+### 3. Advanced Focus Tools
+- **Strict Mode:** Prevent pausing or quitting once started.
+- **Tagging System:** Categorize sessions by project (e.g., "Coding", "Reading") represented as colored honeycombs.
+- **Smart Breaks:** Pomodoro-style automated break timers.
+
+### 4. Community & Analytics
+- **Leaderboards:** See who gathered the most nectar this week.
+- **Honeycomb Heatmap:** Visual representation of daily focus consistency.

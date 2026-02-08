@@ -22,16 +22,25 @@ type Repository interface {
 	StartSession(ctx context.Context, userID string, input postgresql.StartSessionInput) (domain.FocusSession, error)
 	PauseSession(ctx context.Context, userID, sessionID string) (domain.FocusSession, error)
 	ResumeSession(ctx context.Context, userID, sessionID string) (domain.FocusSession, error)
+	AbandonSession(ctx context.Context, userID, sessionID string) (domain.FocusSession, error)
+	ResetSession(ctx context.Context, userID, sessionID string) (domain.FocusSession, error)
+	GetSession(ctx context.Context, userID, sessionID string) (domain.FocusSession, error)
 	AddInterruption(ctx context.Context, userID, sessionID, reason string) (domain.Interruption, error)
 	CompleteSession(ctx context.Context, userID, sessionID string) (domain.FocusSession, error)
 	UpsertReflection(ctx context.Context, userID, sessionID string, input postgresql.ReflectionInput) (domain.Reflection, error)
 	AnalyticsOverview(ctx context.Context, userID string) (domain.AnalyticsOverview, error)
+	GetLeaderboard(ctx context.Context) ([]domain.LeaderboardEntry, error)
+	ListItems(ctx context.Context) ([]domain.Item, error)
+	BuyItem(ctx context.Context, userID, itemID string) (domain.UserItem, error)
+	GetDailyActivity(ctx context.Context, userID string, timezone string) ([]domain.DailyActivity, error)
+	GetRecentReflections(ctx context.Context, userID string, limit int) ([]domain.Reflection, error)
 }
 
 type Handler struct {
 	repo      Repository
 	jwtSecret string
 }
+
 
 func New(repo Repository, jwtSecret string) *Handler {
 	return &Handler{
@@ -86,9 +95,10 @@ func (h *Handler) DevLogin(c *gin.Context) {
 }
 
 type createGoalRequest struct {
-	Topic              string `json:"topic"`
-	DesiredResult      string `json:"desired_result"`
-	RecommendedMinutes int    `json:"recommended_minutes"`
+	Topic              string   `json:"topic"`
+	DesiredResult      string   `json:"desired_result"`
+	RecommendedMinutes int      `json:"recommended_minutes"`
+	Tags               []string `json:"tags"`
 }
 
 func (h *Handler) CreateGoal(c *gin.Context) {
@@ -112,8 +122,11 @@ func (h *Handler) CreateGoal(c *gin.Context) {
 		Topic:              req.Topic,
 		DesiredResult:      req.DesiredResult,
 		RecommendedMinutes: req.RecommendedMinutes,
+		Tags:               req.Tags,
 	})
 	if err != nil {
+		// Log the actual error for debugging
+		println("Error creating goal:", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create goal"})
 		return
 	}
@@ -136,6 +149,7 @@ func (h *Handler) ListGoals(c *gin.Context) {
 type startSessionRequest struct {
 	GoalID             string `json:"goal_id"`
 	RecommendedMinutes int    `json:"recommended_minutes"`
+	IsStrict           bool   `json:"is_strict"`
 }
 
 func (h *Handler) StartSession(c *gin.Context) {
@@ -156,6 +170,7 @@ func (h *Handler) StartSession(c *gin.Context) {
 	session, err := h.repo.StartSession(c.Request.Context(), userID, postgresql.StartSessionInput{
 		GoalID:             req.GoalID,
 		RecommendedMinutes: req.RecommendedMinutes,
+		IsStrict:           req.IsStrict,
 	})
 	if errors.Is(err, postgresql.ErrNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "goal not found"})
@@ -179,6 +194,44 @@ func (h *Handler) ResumeSession(c *gin.Context) {
 	h.sessionAction(c, func(userID, sessionID string) (any, error) {
 		return h.repo.ResumeSession(c.Request.Context(), userID, sessionID)
 	})
+}
+
+func (h *Handler) AbandonSession(c *gin.Context) {
+	h.sessionAction(c, func(userID, sessionID string) (any, error) {
+		return h.repo.AbandonSession(c.Request.Context(), userID, sessionID)
+	})
+}
+
+func (h *Handler) ResetSession(c *gin.Context) {
+	h.sessionAction(c, func(userID, sessionID string) (any, error) {
+		return h.repo.ResetSession(c.Request.Context(), userID, sessionID)
+	})
+}
+
+func (h *Handler) GetSession(c *gin.Context) {
+	userID := middleware.UserID(c)
+	sessionID := strings.TrimSpace(c.Param("sessionID"))
+	if sessionID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "sessionID is required"})
+		return
+	}
+
+	if _, err := uuid.Parse(sessionID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid sessionID format"})
+		return
+	}
+
+	session, err := h.repo.GetSession(c.Request.Context(), userID, sessionID)
+	if errors.Is(err, postgresql.ErrNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get session"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"session": session})
 }
 
 type interruptionRequest struct {
@@ -289,6 +342,97 @@ func (h *Handler) AnalyticsOverview(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"overview": overview})
+}
+
+func (h *Handler) GetLeaderboard(c *gin.Context) {
+	leaderboard, err := h.repo.GetLeaderboard(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load leaderboard"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"leaderboard": leaderboard})
+}
+
+func (h *Handler) ListItems(c *gin.Context) {
+	items, err := h.repo.ListItems(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list items"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": items})
+}
+
+func (h *Handler) BuyItem(c *gin.Context) {
+	userID := middleware.UserID(c)
+	itemID := c.Param("itemID")
+	if itemID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "itemID is required"})
+		return
+	}
+
+	userItem, err := h.repo.BuyItem(c.Request.Context(), userID, itemID)
+	if err != nil {
+		// Basic error handling - could be more specific
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"user_item": userItem})
+}
+
+func (h *Handler) GetDailyActivity(c *gin.Context) {
+	userID := middleware.UserID(c)
+	timezone := c.Query("timezone")
+
+	activity, err := h.repo.GetDailyActivity(c.Request.Context(), userID, timezone)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load daily activity"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"activity": activity})
+}
+
+func (h *Handler) GetInsights(c *gin.Context) {
+	userID := middleware.UserID(c)
+
+	reflections, err := h.repo.GetRecentReflections(c.Request.Context(), userID, 5)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load reflections for AI"})
+		return
+	}
+
+	// Mock AI Logic / Simple Rule-based Engine
+	insight := domain.Insight{
+		Title:   "Focus Optimizer",
+		Content: "Keep up the great work! You're building a consistent focus habit.",
+		Type:    "encouragement",
+	}
+
+	if len(reflections) > 0 {
+		hardCount := 0
+		for _, r := range reflections {
+			if len(r.WhatWasHard) > 20 {
+				hardCount++
+			}
+		}
+
+		if hardCount >= 3 {
+			insight = domain.Insight{
+				Title:   "Burnout Alert",
+				Content: "You've been reporting high difficulty lately. Try reducing your next session to 15 minutes to reset your mental energy.",
+				Type:    "warning",
+			}
+		} else if len(reflections) >= 2 {
+			insight = domain.Insight{
+				Title:   "Deep Work Insight",
+				Content: "You seem to be most productive when you define clear 'Next Actions'. Try to make your next objective even more specific.",
+				Type:    "tip",
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"insight": insight})
 }
 
 func (h *Handler) sessionAction(c *gin.Context, action func(userID, sessionID string) (any, error)) {

@@ -28,13 +28,23 @@ func NewRouter(handler *handlers.Handler, corsOrigin string, jwtSecret string) *
 		api.GET("/goals", handler.ListGoals)
 
 		api.POST("/sessions", handler.StartSession)
+		api.GET("/sessions/:sessionID", handler.GetSession)
 		api.PATCH("/sessions/:sessionID/pause", handler.PauseSession)
 		api.PATCH("/sessions/:sessionID/resume", handler.ResumeSession)
+		api.PATCH("/sessions/:sessionID/reset", handler.ResetSession)
+		api.PATCH("/sessions/:sessionID/abandon", handler.AbandonSession)
 		api.POST("/sessions/:sessionID/interruption", handler.AddInterruption)
 		api.PATCH("/sessions/:sessionID/complete", handler.CompleteSession)
 		api.POST("/sessions/:sessionID/reflection", handler.UpsertReflection)
 
 		api.GET("/analytics/overview", handler.AnalyticsOverview)
+		api.GET("/analytics/activity", handler.GetDailyActivity)
+		api.GET("/analytics/insights", handler.GetInsights)
+
+		api.GET("/leaderboard", handler.GetLeaderboard)
+
+		api.GET("/shop/items", handler.ListItems)
+		api.POST("/shop/items/:itemID/buy", handler.BuyItem)
 	}
 
 	return router
