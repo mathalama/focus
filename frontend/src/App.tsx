@@ -62,7 +62,12 @@ export default function App() {
     }
 
     try {
-      setUser(JSON.parse(persisted) as StoredUser);
+      const parsed = JSON.parse(persisted) as StoredUser;
+      if (parsed && parsed.token) {
+        setUser(parsed);
+      } else {
+        localStorage.removeItem(USER_KEY);
+      }
     } catch {
       localStorage.removeItem(USER_KEY);
     }

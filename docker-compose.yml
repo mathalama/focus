@@ -3,16 +3,16 @@ services:
     image: postgres:16-alpine
     container_name: mathalama-focus-postgres
     environment:
-      POSTGRES_USER: focus
-      POSTGRES_PASSWORD: focus
-      POSTGRES_DB: focus
+      POSTGRES_USER: mathalama
+      POSTGRES_PASSWORD: mathalama
+      POSTGRES_DB: mathalama
     ports:
       - "5432:5432"
     volumes:
       - focus_pg_data:/var/lib/postgresql/data
       - ./backend/migrations/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U focus -d focus"]
+      test: ["CMD-SHELL", "pg_isready -U mathalama -d mathalama"]
       interval: 10s
       timeout: 5s
       retries: 5
