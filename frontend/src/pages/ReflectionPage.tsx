@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -9,6 +10,7 @@ import { motion } from 'framer-motion';
 export const ReflectionPage: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
+  const { refreshUser } = useAuth();
   const [learned, setLearned] = useState('');
   const [hard, setHard] = useState('');
   const [next, setNext] = useState('');
@@ -24,7 +26,8 @@ export const ReflectionPage: React.FC = () => {
         what_was_hard: hard,
         next_action: next
       });
-      navigate('/hive'); // Reward the user by showing the Hive!
+      await refreshUser();
+      navigate('/hive');
     } catch (err) {
       console.error(err);
     } finally {

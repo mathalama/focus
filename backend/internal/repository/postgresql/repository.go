@@ -17,6 +17,7 @@ var (
 	ErrNotFound          = errors.New("resource not found")
 	ErrPauseLimitReached = errors.New("pause limit reached")
 	ErrInvalidState      = errors.New("session is in invalid state for this action")
+	ErrGoalCompleted     = errors.New("goal already completed")
 )
 
 type Repository struct {
@@ -47,6 +48,31 @@ func New(pool *pgxpool.Pool, maxSessionPauses int) *Repository {
 	return &Repository{pool: pool, maxSessionPauses: maxSessionPauses}
 }
 
+func (r *Repository) GetUser(ctx context.Context, userID string) (domain.User, error) {
+	const query = `
+		SELECT id, email, name, nectar_balance, total_nectar_earned, created_at
+		FROM users
+		WHERE id = $1
+	`
+
+	var user domain.User
+	if err := r.pool.QueryRow(ctx, query, userID).Scan(
+		&user.ID,
+		&user.Email,
+		&user.Name,
+		&user.NectarBalance,
+		&user.TotalNectarEarned,
+		&user.CreatedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.User{}, ErrNotFound
+		}
+		return domain.User{}, fmt.Errorf("get user: %w", err)
+	}
+
+	return user, nil
+}
+
 func (r *Repository) DevLogin(ctx context.Context, email, name string) (domain.User, error) {
 	const query = `
 		INSERT INTO users (email, name)
@@ -75,7 +101,7 @@ func (r *Repository) CreateGoal(ctx context.Context, userID string, input Create
 	const query = `
 		INSERT INTO goals (user_id, topic, desired_result, recommended_minutes, tags)
 		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, user_id, topic, desired_result, recommended_minutes, tags, created_at
+		RETURNING id, user_id, topic, desired_result, recommended_minutes, tags, completed_at, created_at
 	`
 
 	minutes := input.RecommendedMinutes
@@ -95,6 +121,7 @@ func (r *Repository) CreateGoal(ctx context.Context, userID string, input Create
 		&goal.DesiredResult,
 		&goal.RecommendedMinutes,
 		&goal.Tags,
+		&goal.CompletedAt,
 		&goal.CreatedAt,
 	); err != nil {
 		return domain.Goal{}, fmt.Errorf("create goal: %w", err)
@@ -105,9 +132,10 @@ func (r *Repository) CreateGoal(ctx context.Context, userID string, input Create
 
 func (r *Repository) ListGoals(ctx context.Context, userID string) ([]domain.Goal, error) {
 	const query = `
-		SELECT id, user_id, topic, desired_result, recommended_minutes, tags, created_at
+		SELECT id, user_id, topic, desired_result, recommended_minutes, tags, completed_at, created_at
 		FROM goals
 		WHERE user_id = $1
+		  AND completed_at IS NULL
 		ORDER BY created_at DESC
 	`
 
@@ -127,6 +155,7 @@ func (r *Repository) ListGoals(ctx context.Context, userID string) ([]domain.Goa
 			&goal.DesiredResult,
 			&goal.RecommendedMinutes,
 			&goal.Tags,
+			&goal.CompletedAt,
 			&goal.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan goal: %w", err)
@@ -141,17 +170,60 @@ func (r *Repository) ListGoals(ctx context.Context, userID string) ([]domain.Goa
 	return goals, nil
 }
 
+func (r *Repository) ListGoalHistory(ctx context.Context, userID string) ([]domain.Goal, error) {
+	const query = `
+		SELECT id, user_id, topic, desired_result, recommended_minutes, tags, completed_at, created_at
+		FROM goals
+		WHERE user_id = $1
+		  AND completed_at IS NOT NULL
+		ORDER BY completed_at DESC
+		LIMIT 100
+	`
+
+	rows, err := r.pool.Query(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list goal history: %w", err)
+	}
+	defer rows.Close()
+
+	goals := make([]domain.Goal, 0)
+	for rows.Next() {
+		var goal domain.Goal
+		if err := rows.Scan(
+			&goal.ID,
+			&goal.UserID,
+			&goal.Topic,
+			&goal.DesiredResult,
+			&goal.RecommendedMinutes,
+			&goal.Tags,
+			&goal.CompletedAt,
+			&goal.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan goal history: %w", err)
+		}
+		goals = append(goals, goal)
+	}
+
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("iterate goal history: %w", rows.Err())
+	}
+
+	return goals, nil
+}
+
 func (r *Repository) StartSession(ctx context.Context, userID string, input StartSessionInput) (domain.FocusSession, error) {
 	if _, err := uuid.Parse(input.GoalID); err != nil {
 		return domain.FocusSession{}, fmt.Errorf("invalid goal id: %w", err)
 	}
 
-	const query = `
-		INSERT INTO focus_sessions (user_id, goal_id, recommended_minutes, is_strict, status)
-		SELECT $1, g.id, $3, $4, 'active'
-		FROM goals g
-		WHERE g.id = $2 AND g.user_id = $1
-		RETURNING id, user_id, goal_id, recommended_minutes, is_strict, status, pause_count, started_at, paused_at, completed_at
+	const existingQuery = `
+		SELECT id, user_id, goal_id, recommended_minutes, is_strict, status, pause_count, started_at, paused_at, completed_at
+		FROM focus_sessions
+		WHERE user_id = $1
+		  AND goal_id = $2
+		  AND status IN ('active', 'paused')
+		ORDER BY started_at DESC
+		LIMIT 1
 	`
 
 	minutes := input.RecommendedMinutes
@@ -160,7 +232,34 @@ func (r *Repository) StartSession(ctx context.Context, userID string, input Star
 	}
 
 	var session domain.FocusSession
-	if err := r.pool.QueryRow(ctx, query, userID, input.GoalID, minutes, input.IsStrict).Scan(
+	if err := r.pool.QueryRow(ctx, existingQuery, userID, input.GoalID).Scan(
+		&session.ID,
+		&session.UserID,
+		&session.GoalID,
+		&session.RecommendedMinutes,
+		&session.IsStrict,
+		&session.Status,
+		&session.PauseCount,
+		&session.StartedAt,
+		&session.PausedAt,
+		&session.CompletedAt,
+	); err == nil {
+		return session, nil
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return domain.FocusSession{}, fmt.Errorf("find active session: %w", err)
+	}
+
+	const insertQuery = `
+		INSERT INTO focus_sessions (user_id, goal_id, recommended_minutes, is_strict, status)
+		SELECT $1, g.id, $3, $4, 'active'
+		FROM goals g
+		WHERE g.id = $2
+		  AND g.user_id = $1
+		  AND g.completed_at IS NULL
+		RETURNING id, user_id, goal_id, recommended_minutes, is_strict, status, pause_count, started_at, paused_at, completed_at
+	`
+
+	if err := r.pool.QueryRow(ctx, insertQuery, userID, input.GoalID, minutes, input.IsStrict).Scan(
 		&session.ID,
 		&session.UserID,
 		&session.GoalID,
@@ -173,7 +272,24 @@ func (r *Repository) StartSession(ctx context.Context, userID string, input Star
 		&session.CompletedAt,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return domain.FocusSession{}, ErrNotFound
+			const goalStateQuery = `
+				SELECT completed_at IS NOT NULL
+				FROM goals
+				WHERE id = $1
+				  AND user_id = $2
+			`
+
+			var isCompleted bool
+			if stateErr := r.pool.QueryRow(ctx, goalStateQuery, input.GoalID, userID).Scan(&isCompleted); stateErr != nil {
+				if errors.Is(stateErr, pgx.ErrNoRows) {
+					return domain.FocusSession{}, ErrNotFound
+				}
+				return domain.FocusSession{}, fmt.Errorf("check goal state: %w", stateErr)
+			}
+			if isCompleted {
+				return domain.FocusSession{}, ErrGoalCompleted
+			}
+			return domain.FocusSession{}, ErrInvalidState
 		}
 		return domain.FocusSession{}, fmt.Errorf("start session: %w", err)
 	}
@@ -251,6 +367,10 @@ func (r *Repository) ResumeSession(ctx context.Context, userID, sessionID string
 	const query = `
 		UPDATE focus_sessions
 		SET status = 'active',
+			started_at = CASE
+				WHEN paused_at IS NOT NULL THEN started_at + (NOW() - paused_at)
+				ELSE started_at
+			END,
 			paused_at = NULL
 		WHERE id = $1
 		  AND user_id = $2
@@ -344,7 +464,7 @@ func (r *Repository) AbandonSession(ctx context.Context, userID, sessionID strin
 		}
 		return domain.FocusSession{}, fmt.Errorf("abandon session: %w", err)
 	}
-	
+
 	return session, nil
 }
 
@@ -427,7 +547,7 @@ func (r *Repository) CompleteSession(ctx context.Context, userID, sessionID stri
 		WHERE id = $1
 		  AND user_id = $2
 		  AND status IN ('active', 'paused')
-		RETURNING id, user_id, goal_id, recommended_minutes, status, pause_count, started_at, paused_at, completed_at
+		RETURNING id, user_id, goal_id, recommended_minutes, is_strict, status, pause_count, started_at, paused_at, completed_at
 	`
 
 	var session domain.FocusSession
@@ -436,6 +556,7 @@ func (r *Repository) CompleteSession(ctx context.Context, userID, sessionID stri
 		&session.UserID,
 		&session.GoalID,
 		&session.RecommendedMinutes,
+		&session.IsStrict,
 		&session.Status,
 		&session.PauseCount,
 		&session.StartedAt,
@@ -578,6 +699,9 @@ func (r *Repository) AnalyticsOverview(ctx context.Context, userID string) (doma
 		WHERE id = $1
 	`
 	if err := r.pool.QueryRow(ctx, nectarQuery, userID).Scan(&overview.TotalNectarEarned); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.AnalyticsOverview{}, ErrNotFound
+		}
 		return domain.AnalyticsOverview{}, fmt.Errorf("load total nectar: %w", err)
 	}
 
@@ -703,7 +827,7 @@ func (r *Repository) GetDailyActivity(ctx context.Context, userID string, timezo
 			COALESCE(SUM(recommended_minutes), 0)::INT as total_minutes
 		FROM focus_sessions
 		WHERE user_id = $1
-		  AND started_at > NOW() - INTERVAL '60 days'
+		  AND started_at > NOW() - INTERVAL '365 days'
 		  AND status = 'completed'
 		GROUP BY date
 		ORDER BY date ASC

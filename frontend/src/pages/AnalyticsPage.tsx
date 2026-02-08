@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api, AnalyticsOverview, DailyActivity } from '../lib/api';
 import { Card } from '../components/ui/Card';
 import { Target, Zap, Activity, Award } from 'lucide-react';
+import { addDays, differenceInCalendarDays, eachDayOfInterval, format, startOfWeek, subDays } from 'date-fns';
 
 export const AnalyticsPage: React.FC = () => {
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
@@ -20,6 +21,37 @@ export const AnalyticsPage: React.FC = () => {
   }, []);
 
   if (loading) return <div className="text-xs font-mono text-muted-foreground">LOADING ANALYTICS...</div>;
+
+  const today = new Date();
+  const rangeStart = subDays(today, 364);
+  const gridStart = startOfWeek(rangeStart, { weekStartsOn: 0 });
+  const totalDays = differenceInCalendarDays(today, gridStart) + 1;
+  const allGridDays = eachDayOfInterval({ start: gridStart, end: addDays(gridStart, totalDays - 1) });
+
+  const weeks: Date[][] = [];
+  for (let i = 0; i < allGridDays.length; i += 7) {
+    weeks.push(allGridDays.slice(i, i + 7));
+  }
+
+  const activityByDate = new Map(activity.map((entry) => [entry.date, entry]));
+
+  const monthLabels = new Map<number, string>();
+  monthLabels.set(0, format(rangeStart, 'MMM'));
+  for (let w = 0; w < weeks.length; w++) {
+    const monthStartDay = weeks[w].find((day) => day >= rangeStart && day <= today && day.getDate() === 1);
+    if (monthStartDay) {
+      monthLabels.set(w, format(monthStartDay, 'MMM'));
+    }
+  }
+
+  const intensityClass = (minutes: number, inRange: boolean) => {
+    if (!inRange) return 'bg-transparent';
+    if (minutes === 0) return 'bg-secondary';
+    if (minutes < 25) return 'bg-zinc-700';
+    if (minutes < 50) return 'bg-zinc-500';
+    if (minutes < 90) return 'bg-zinc-300';
+    return 'bg-white';
+  };
 
   return (
     <div className="space-y-8 font-sans">
@@ -59,37 +91,55 @@ export const AnalyticsPage: React.FC = () => {
 
       {/* Heatmap */}
       <Card className="bg-surface border-border shadow-none">
-        <h2 className="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">Activity Log (60 Days)</h2>
-        <div className="flex flex-wrap gap-1">
-          {Array.from({ length: 60 }).map((_, i) => {
-            const date = new Date();
-            date.setDate(date.getDate() - (59 - i));
-            const dateStr = date.toISOString().split('T')[0];
-            const dayActivity = activity.find(a => a.date === dateStr);
-            const intensity = dayActivity 
-              ? Math.min(dayActivity.total_minutes / 60, 1) 
-              : 0;
+        <h2 className="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">Activity Log (Last 12 Months)</h2>
+        <div className="overflow-x-auto pb-2">
+          <div className="min-w-[840px]">
+            <div className="mb-2 grid gap-1 text-[10px] font-mono uppercase tracking-wider text-muted-foreground" style={{ gridTemplateColumns: `repeat(${weeks.length}, minmax(0, 1fr))` }}>
+              {weeks.map((_, weekIndex) => (
+                <div key={`month-${weekIndex}`} className="h-3 truncate">
+                  {monthLabels.get(weekIndex) ?? ''}
+                </div>
+              ))}
+            </div>
 
-            return (
-              <div 
-                key={i}
-                title={`${dateStr}: ${dayActivity?.total_minutes || 0} mins`}
-                className={`h-3 w-3 rounded-[2px] transition-all hover:ring-1 hover:ring-white ${
-                  intensity === 0 ? 'bg-secondary' :
-                  intensity < 0.3 ? 'bg-zinc-600' :
-                  intensity < 0.7 ? 'bg-zinc-400' :
-                  'bg-white'
-                }`}
-              />
-            );
-          })}
+            <div className="flex items-start gap-2">
+              <div className="mt-[1px] flex h-[84px] flex-col justify-between text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                <span>Mon</span>
+                <span>Wed</span>
+                <span>Fri</span>
+              </div>
+
+              <div className="flex gap-1">
+                {weeks.map((week, weekIndex) => (
+                  <div key={`week-${weekIndex}`} className="flex flex-col gap-1">
+                    {week.map((day) => {
+                      const inRange = day >= rangeStart && day <= today;
+                      const dateKey = format(day, 'yyyy-MM-dd');
+                      const dayActivity = activityByDate.get(dateKey);
+                      const totalMinutes = inRange ? dayActivity?.total_minutes ?? 0 : 0;
+
+                      return (
+                        <div
+                          key={dateKey}
+                          title={`${dateKey}: ${totalMinutes} mins`}
+                          className={`h-3 w-3 rounded-[2px] transition-all hover:ring-1 hover:ring-white/80 ${intensityClass(totalMinutes, inRange)}`}
+                        />
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
+
         <div className="mt-4 flex items-center justify-end gap-2 text-[10px] font-mono uppercase text-muted-foreground">
           <span>Less</span>
           <div className="flex gap-1">
             <div className="h-2.5 w-2.5 rounded-[2px] bg-secondary" />
-            <div className="h-2.5 w-2.5 rounded-[2px] bg-zinc-600" />
-            <div className="h-2.5 w-2.5 rounded-[2px] bg-zinc-400" />
+            <div className="h-2.5 w-2.5 rounded-[2px] bg-zinc-700" />
+            <div className="h-2.5 w-2.5 rounded-[2px] bg-zinc-500" />
+            <div className="h-2.5 w-2.5 rounded-[2px] bg-zinc-300" />
             <div className="h-2.5 w-2.5 rounded-[2px] bg-white" />
           </div>
           <span>More</span>

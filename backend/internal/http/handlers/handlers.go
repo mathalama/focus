@@ -13,12 +13,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type Repository interface {
+	GetUser(ctx context.Context, userID string) (domain.User, error)
 	DevLogin(ctx context.Context, email, name string) (domain.User, error)
 	CreateGoal(ctx context.Context, userID string, input postgresql.CreateGoalInput) (domain.Goal, error)
 	ListGoals(ctx context.Context, userID string) ([]domain.Goal, error)
+	ListGoalHistory(ctx context.Context, userID string) ([]domain.Goal, error)
 	StartSession(ctx context.Context, userID string, input postgresql.StartSessionInput) (domain.FocusSession, error)
 	PauseSession(ctx context.Context, userID, sessionID string) (domain.FocusSession, error)
 	ResumeSession(ctx context.Context, userID, sessionID string) (domain.FocusSession, error)
@@ -41,7 +44,6 @@ type Handler struct {
 	jwtSecret string
 }
 
-
 func New(repo Repository, jwtSecret string) *Handler {
 	return &Handler{
 		repo:      repo,
@@ -51,6 +53,22 @@ func New(repo Repository, jwtSecret string) *Handler {
 
 func (h *Handler) Health(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+func (h *Handler) GetMe(c *gin.Context) {
+	userID := middleware.UserID(c)
+
+	user, err := h.repo.GetUser(c.Request.Context(), userID)
+	if errors.Is(err, postgresql.ErrNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"user": user})
 }
 
 type devLoginRequest struct {
@@ -125,8 +143,11 @@ func (h *Handler) CreateGoal(c *gin.Context) {
 		Tags:               req.Tags,
 	})
 	if err != nil {
-		// Log the actual error for debugging
-		println("Error creating goal:", err.Error())
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.ConstraintName == "goals_user_id_fkey" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid session, please login again"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create goal"})
 		return
 	}
@@ -140,6 +161,18 @@ func (h *Handler) ListGoals(c *gin.Context) {
 	goals, err := h.repo.ListGoals(c.Request.Context(), userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list goals"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"goals": goals})
+}
+
+func (h *Handler) ListGoalHistory(c *gin.Context) {
+	userID := middleware.UserID(c)
+
+	goals, err := h.repo.ListGoalHistory(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list goal history"})
 		return
 	}
 
@@ -172,6 +205,10 @@ func (h *Handler) StartSession(c *gin.Context) {
 		RecommendedMinutes: req.RecommendedMinutes,
 		IsStrict:           req.IsStrict,
 	})
+	if errors.Is(err, postgresql.ErrGoalCompleted) {
+		c.JSON(http.StatusConflict, gin.H{"error": "goal already completed"})
+		return
+	}
 	if errors.Is(err, postgresql.ErrNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "goal not found"})
 		return
@@ -336,6 +373,10 @@ func (h *Handler) AnalyticsOverview(c *gin.Context) {
 	userID := middleware.UserID(c)
 
 	overview, err := h.repo.AnalyticsOverview(c.Request.Context(), userID)
+	if errors.Is(err, postgresql.ErrNotFound) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid session, please login again"})
+		return
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load analytics"})
 		return

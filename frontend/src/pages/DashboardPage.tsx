@@ -1,27 +1,31 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { api, Goal, Insight } from '../lib/api';
+import { useLanguage } from '../context/LanguageContext';
+import { api, Goal } from '../lib/api';
+import { DailyQuote, getDailyQuote, msUntilNextLocalDay } from '../lib/dailyQuotes';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { useNavigate } from 'react-router-dom';
-import { Activity, Clock, ArrowRight, Hash, Sparkles, AlertTriangle, Lightbulb } from 'lucide-react';
+import { Activity, Clock, Hash, Quote, CheckCircle2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export const DashboardPage: React.FC = () => {
   const { user } = useAuth();
+  const { language } = useLanguage();
   const [goals, setGoals] = useState<Goal[]>([]);
-  const [insight, setInsight] = useState<Insight | null>(null);
+  const [goalHistory, setGoalHistory] = useState<Goal[]>([]);
+  const [dailyQuote, setDailyQuote] = useState<DailyQuote>(() => getDailyQuote(language, new Date()));
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
     try {
-      const [goalsData, insightData] = await Promise.all([
+      const [goalsData, historyData] = await Promise.all([
         api.goals.list(),
-        api.analytics.insights()
+        api.goals.history()
       ]);
       setGoals(goalsData.goals || []);
-      setInsight(insightData.insight);
+      setGoalHistory(historyData.goals || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -32,6 +36,24 @@ export const DashboardPage: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    let timer: number | undefined;
+
+    const scheduleQuoteRefresh = () => {
+      const now = new Date();
+      setDailyQuote(getDailyQuote(language, now));
+      timer = window.setTimeout(scheduleQuoteRefresh, msUntilNextLocalDay(now));
+    };
+
+    scheduleQuoteRefresh();
+
+    return () => {
+      if (timer) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [language]);
 
   return (
     <div className="space-y-8 font-sans">
@@ -47,60 +69,80 @@ export const DashboardPage: React.FC = () => {
         </Button>
       </header>
 
-      {insight && (
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-          <Card className="bg-surfaceHighlight/30 border-accent/20 border-l-4 border-l-accent p-4 relative overflow-hidden">
-            <div className="flex items-start gap-4 relative z-10">
-              <div className="p-2 rounded bg-accent/10 text-accent">
-                {insight.type === 'warning' ? <AlertTriangle size={18} /> : 
-                 insight.type === 'tip' ? <Lightbulb size={18} /> : 
-                 <Sparkles size={18} />}
-              </div>
-              <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-accent mb-1 font-mono">AI Insight: {insight.title}</h3>
-                <p className="text-sm text-primary leading-relaxed">{insight.content}</p>
-              </div>
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
+        <Card className="bg-surfaceHighlight/20 border-border p-4">
+          <div className="flex items-start gap-3">
+            <div className="rounded bg-accent/10 p-2 text-accent">
+              <Quote size={16} />
             </div>
-            <div className="absolute top-0 right-0 p-2 opacity-5">
-               <Sparkles size={64} />
+            <div>
+              <h3 className="mb-1 text-xs font-bold uppercase tracking-widest text-muted-foreground">Daily Quote</h3>
+              <p className="text-sm leading-relaxed text-primary">{dailyQuote.text}</p>
+              <p className="mt-2 text-[11px] font-mono uppercase tracking-wider text-muted-foreground">{dailyQuote.author}</p>
             </div>
-          </Card>
-        </motion.div>
-      )}
+          </div>
+        </Card>
+      </motion.div>
 
       <div className="grid gap-8 lg:grid-cols-[1fr,1.5fr]">
         <div className="space-y-6">
-           <CreateGoalForm onGoalCreated={fetchData} />
+           <CreateGoalForm />
         </div>
 
-        <div className="space-y-4">
-           <div className="flex items-center justify-between">
-             <h2 className="text-sm font-medium tracking-wider text-muted-foreground uppercase">Recent Objectives</h2>
-             <span className="text-xs font-mono text-muted-foreground">{goals.length} ACTIVE</span>
-           </div>
-           
-           {loading ? (
-             <div className="py-12 text-center text-xs font-mono text-muted-foreground animate-pulse">
-               LOADING OBJECTIVES...
-             </div>
-           ) : goals.length === 0 ? (
-             <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-               No active objectives found. Initialize new protocol.
-             </div>
-           ) : (
-             <div className="grid gap-3">
-               {goals.map((goal) => (
-                 <GoalCard key={goal.id} goal={goal} />
-               ))}
-             </div>
-           )}
+        <div className="space-y-8">
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-medium tracking-wider text-muted-foreground uppercase">Recent Objectives</h2>
+              <span className="text-xs font-mono text-muted-foreground">{goals.length} ACTIVE</span>
+            </div>
+
+            {loading ? (
+              <div className="py-12 text-center text-xs font-mono text-muted-foreground animate-pulse">
+                LOADING OBJECTIVES...
+              </div>
+            ) : goals.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+                No active objectives found. Initialize new protocol.
+              </div>
+            ) : (
+              <div className="grid gap-3">
+                {goals.map((goal) => (
+                  <GoalCard key={goal.id} goal={goal} />
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-medium tracking-wider text-muted-foreground uppercase">Completed History</h2>
+              <span className="text-xs font-mono text-muted-foreground">{goalHistory.length} DONE</span>
+            </div>
+
+            {loading ? (
+              <div className="py-8 text-center text-xs font-mono text-muted-foreground animate-pulse">
+                LOADING HISTORY...
+              </div>
+            ) : goalHistory.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                No completed objectives yet.
+              </div>
+            ) : (
+              <div className="grid gap-2">
+                {goalHistory.map((goal) => (
+                  <CompletedGoalRow key={goal.id} goal={goal} />
+                ))}
+              </div>
+            )}
+          </section>
         </div>
       </div>
     </div>
   );
 };
 
-const CreateGoalForm: React.FC<{ onGoalCreated: () => void }> = ({ onGoalCreated }) => {
+const CreateGoalForm: React.FC = () => {
+  const navigate = useNavigate();
   const [topic, setTopic] = useState('');
   const [result, setResult] = useState('');
   const [minutes, setMinutes] = useState(25);
@@ -112,16 +154,20 @@ const CreateGoalForm: React.FC<{ onGoalCreated: () => void }> = ({ onGoalCreated
     setLoading(true);
     try {
       const tagList = tags.split(',').map(t => t.trim()).filter(Boolean);
-      await api.goals.create({
+      const { goal } = await api.goals.create({
         topic,
         desired_result: result,
         recommended_minutes: minutes,
         tags: tagList
       });
-      setTopic('');
-      setResult('');
-      setTags('');
-      onGoalCreated();
+
+      const { session } = await api.sessions.start({
+        goal_id: goal.id,
+        recommended_minutes: goal.recommended_minutes ?? minutes,
+        is_strict: false
+      });
+
+      navigate(`/session/${session.id}`);
     } catch (err) {
       console.error(err);
     } finally {
@@ -141,7 +187,7 @@ const CreateGoalForm: React.FC<{ onGoalCreated: () => void }> = ({ onGoalCreated
            <div className="space-y-1.5">
              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Topic</label>
              <Input 
-               placeholder="SYS.BACKEND.API" 
+               placeholder="Study Session" 
                value={topic}
                onChange={e => setTopic(e.target.value)}
                className="font-mono text-xs bg-background border-border"
@@ -165,7 +211,7 @@ const CreateGoalForm: React.FC<{ onGoalCreated: () => void }> = ({ onGoalCreated
          <div className="space-y-1.5">
            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Desired Result</label>
            <Input 
-             placeholder="Implement authentication..." 
+             placeholder="Finish chapter notes..." 
              value={result}
              onChange={e => setResult(e.target.value)}
              className="text-sm bg-background border-border"
@@ -179,7 +225,7 @@ const CreateGoalForm: React.FC<{ onGoalCreated: () => void }> = ({ onGoalCreated
               <Hash className="absolute left-3 top-3 h-3.5 w-3.5 text-muted-foreground" />
               <Input 
                 className="pl-9 text-xs font-mono bg-background border-border"
-                placeholder="dev, urgent"
+                placeholder="study, priority"
                 value={tags}
                 onChange={e => setTags(e.target.value)}
               />
@@ -198,10 +244,11 @@ const CreateGoalForm: React.FC<{ onGoalCreated: () => void }> = ({ onGoalCreated
 
 const GoalCard: React.FC<{ goal: Goal }> = ({ goal }) => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
+  const [starting, setStarting] = useState(false);
 
   const handleStart = async () => {
-    setLoading(true);
+    if (starting) return;
+    setStarting(true);
     try {
       const { session } = await api.sessions.start({
         goal_id: goal.id,
@@ -211,7 +258,7 @@ const GoalCard: React.FC<{ goal: Goal }> = ({ goal }) => {
       navigate(`/session/${session.id}`);
     } catch (err) {
       console.error(err);
-      setLoading(false);
+      setStarting(false);
     }
   };
 
@@ -254,5 +301,31 @@ const GoalCard: React.FC<{ goal: Goal }> = ({ goal }) => {
         )}
       </div>
     </motion.div>
+  );
+};
+
+const CompletedGoalRow: React.FC<{ goal: Goal }> = ({ goal }) => {
+  const completedAt = goal.completed_at ? new Date(goal.completed_at) : null;
+  const completedLabel = completedAt
+    ? completedAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    : 'completed';
+
+  return (
+    <div className="flex items-center justify-between rounded-lg border border-border bg-surface/70 px-3 py-2">
+      <div className="flex min-w-0 items-center gap-2">
+        <CheckCircle2 size={14} className="text-accent" />
+        <div className="min-w-0">
+          <p className="truncate font-mono text-[11px] font-bold uppercase tracking-wide text-primary">{goal.topic}</p>
+          <p className="truncate text-xs text-muted-foreground">{goal.desired_result}</p>
+        </div>
+      </div>
+
+      <div className="ml-3 flex items-center gap-2 whitespace-nowrap text-[10px] font-mono uppercase text-muted-foreground">
+        <Clock size={10} />
+        <span>{goal.recommended_minutes}m</span>
+        <span>•</span>
+        <span>{completedLabel}</span>
+      </div>
+    </div>
   );
 };

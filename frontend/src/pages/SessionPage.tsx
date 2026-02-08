@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api, FocusSession } from '../lib/api';
 import { Button } from '../components/ui/Button';
@@ -14,6 +14,28 @@ export const SessionPage: React.FC = () => {
   const [breakTime, setBreakTime] = useState(0); // Local break timer in seconds
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+
+  const syncTimeFromSession = useCallback((nextSession: FocusSession) => {
+    const startDate = parseISO(nextSession.started_at);
+    const endDate = addMinutes(startDate, nextSession.recommended_minutes);
+
+    if (nextSession.status === 'active') {
+      setTimeLeft(Math.max(0, differenceInSeconds(endDate, new Date())));
+      return;
+    }
+
+    if (nextSession.status === 'paused' && nextSession.paused_at) {
+      setTimeLeft(Math.max(0, differenceInSeconds(endDate, parseISO(nextSession.paused_at))));
+      return;
+    }
+
+    if (nextSession.status === 'completed' || nextSession.status === 'cancelled') {
+      setTimeLeft(0);
+      return;
+    }
+
+    setTimeLeft(nextSession.recommended_minutes * 60);
+  }, []);
   
   // Focus Timer
   useEffect(() => {
@@ -44,31 +66,54 @@ export const SessionPage: React.FC = () => {
     return () => clearInterval(interval);
   }, [breakTime]);
 
-  const fetchSession = async () => {
+  const fetchSession = useCallback(async (isInitialLoad = false) => {
     if (!sessionId) return;
+    if (isInitialLoad) {
+      setLoading(true);
+    }
+
     try {
       const data = await api.sessions.get(sessionId);
-      setSession(data.session);
-      
-      if (data.session.status === 'active') {
-         const startDate = parseISO(data.session.started_at);
-         const endDate = addMinutes(startDate, data.session.recommended_minutes);
-         const diff = differenceInSeconds(endDate, new Date());
-         setTimeLeft(Math.max(0, diff));
-      } else {
-         setTimeLeft(data.session.recommended_minutes * 60);
+      const nextSession = data.session;
+      setSession(nextSession);
+      syncTimeFromSession(nextSession);
+
+      if (nextSession.status === 'active') {
+        setBreakTime(0);
+      }
+
+      if (nextSession.status === 'completed') {
+        navigate(`/session/${sessionId}/reflection`, { replace: true });
+        return;
+      }
+      if (nextSession.status === 'cancelled') {
+        navigate('/', { replace: true });
+        return;
       }
     } catch (err) {
       console.error(err);
       navigate('/');
     } finally {
-      setLoading(false);
+      if (isInitialLoad) {
+        setLoading(false);
+      }
     }
-  };
+  }, [navigate, sessionId, syncTimeFromSession]);
 
   useEffect(() => {
-    fetchSession();
-  }, [sessionId]);
+    void fetchSession(true);
+  }, [fetchSession]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    const interval = setInterval(() => {
+      if (!actionLoading) {
+        void fetchSession(false);
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [actionLoading, fetchSession, sessionId]);
 
   const handleAction = async (action: 'pause' | 'resume' | 'abandon' | 'complete' | 'reset') => {
     if (!sessionId) return;
@@ -103,6 +148,7 @@ export const SessionPage: React.FC = () => {
       }
 
       setSession(res.session);
+      syncTimeFromSession(res.session);
     } catch (err) {
       console.error(err);
     } finally {
@@ -144,17 +190,6 @@ export const SessionPage: React.FC = () => {
         className="w-full max-w-md text-center"
       >
         <div className="relative mx-auto mb-10 flex h-64 w-64 items-center justify-center">
-          {/* Static Ring */}
-          <circle
-              cx="128"
-              cy="128"
-              r="120"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1"
-              className="text-surfaceHighlight"
-            />
-
           {/* Progress Ring */}
           <svg className="absolute inset-0 h-full w-full -rotate-90">
              {/* Background track */}

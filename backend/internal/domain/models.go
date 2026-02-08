@@ -18,6 +18,7 @@ type Goal struct {
 	DesiredResult      string    `json:"desired_result"`
 	RecommendedMinutes int       `json:"recommended_minutes"`
 	Tags               []string  `json:"tags"`
+	CompletedAt        *time.Time `json:"completed_at"`
 	CreatedAt          time.Time `json:"created_at"`
 }
 
@@ -93,4 +94,3 @@ type Insight struct {
 	Content string `json:"content"`
 	Type    string `json:"type"` // 'tip', 'warning', 'encouragement'
 }
-

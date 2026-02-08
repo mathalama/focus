@@ -15,6 +15,7 @@ export interface Goal {
   desired_result: string;
   recommended_minutes: number;
   tags?: string[];
+  completed_at?: string;
   created_at: string;
 }
 
@@ -49,6 +50,14 @@ export interface UserItem {
   id: string;
   item_id: string;
   purchased_at: string;
+}
+
+export interface Interruption {
+  id: string;
+  session_id: string;
+  kind: string;
+  reason: string;
+  created_at: string;
 }
 
 export interface DailyActivity {
@@ -87,6 +96,13 @@ export const api = {
       if (!res.ok) throw new Error('Login failed');
       return res.json();
     },
+    getMe: async () => {
+      const res = await fetch(`${API_BASE_URL}/api/v1/me`, {
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) throw new Error('Failed to get user');
+      return res.json();
+    },
   },
   goals: {
     create: async (data: { topic: string; desired_result: string; recommended_minutes: number; tags: string[] }) => {
@@ -103,6 +119,13 @@ export const api = {
         headers: getAuthHeaders(),
       });
       if (!res.ok) throw new Error('Failed to list goals');
+      return res.json();
+    },
+    history: async () => {
+      const res = await fetch(`${API_BASE_URL}/api/v1/goals/history`, {
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) throw new Error('Failed to list goal history');
       return res.json();
     },
   },
@@ -161,6 +184,15 @@ export const api = {
         headers: getAuthHeaders(),
       });
       if (!res.ok) throw new Error('Failed to complete session');
+      return res.json();
+    },
+    addInterruption: async (sessionID: string, reason: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionID}/interruption`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ reason }),
+      });
+      if (!res.ok) throw new Error('Failed to add interruption');
       return res.json();
     },
     reflection: async (sessionID: string, data: { what_learned: string; what_was_hard: string; next_action: string }) => {

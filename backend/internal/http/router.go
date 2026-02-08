@@ -24,8 +24,11 @@ func NewRouter(handler *handlers.Handler, corsOrigin string, jwtSecret string) *
 	api := router.Group("/api/v1")
 	api.Use(middleware.RequireUserID(jwtSecret))
 	{
+		api.GET("/me", handler.GetMe)
+
 		api.POST("/goals", handler.CreateGoal)
 		api.GET("/goals", handler.ListGoals)
+		api.GET("/goals/history", handler.ListGoalHistory)
 
 		api.POST("/sessions", handler.StartSession)
 		api.GET("/sessions/:sessionID", handler.GetSession)

@@ -1,11 +1,13 @@
 import React from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, BarChart3, LogOut, Trophy, Activity } from 'lucide-react';
+import { LayoutDashboard, BarChart3, LogOut, Trophy, Activity, UserRound, Languages } from 'lucide-react';
 import { cn } from './ui/Button';
+import { useLanguage } from '../context/LanguageContext';
 
 export const Layout: React.FC = () => {
   const { user, logout } = useAuth();
+  const { language } = useLanguage();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -13,6 +15,7 @@ export const Layout: React.FC = () => {
     { path: '/', label: 'Focus', icon: LayoutDashboard },
     { path: '/hive', label: 'Leaderboard', icon: Trophy }, // Renamed from "The Hive"
     { path: '/analytics', label: 'Analytics', icon: BarChart3 },
+    { path: '/profile', label: 'Profile', icon: UserRound },
   ];
 
   const handleLogout = () => {
@@ -64,6 +67,15 @@ export const Layout: React.FC = () => {
                 <span className="text-accent">{user.nectar_balance} pts</span>
               </div>
             )}
+
+            <Link
+              to="/profile"
+              className="flex items-center gap-1 rounded px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-muted-foreground transition-colors hover:text-primary"
+              title="Language and profile settings"
+            >
+              <Languages size={12} />
+              {language}
+            </Link>
             
             <button
               onClick={handleLogout}
