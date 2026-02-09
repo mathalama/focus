@@ -21,12 +21,14 @@ import (
 
 const (
 	defaultBackendURL = "http://localhost:8080"
+	defaultAppURL     = "http://localhost:5173"
 	defaultPollWait   = 30 * time.Second
 )
 
 type config struct {
 	token       string
 	backendURL  string
+	appURL      string
 	botAuth     string
 	pollTimeout time.Duration
 }
@@ -82,6 +84,17 @@ type backendTelegramLinkRequest struct {
 	TelegramLast     string `json:"telegram_last_name"`
 }
 
+type backendLinkedUser struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+type backendTelegramStatusResponse struct {
+	Linked bool               `json:"linked"`
+	User   *backendLinkedUser `json:"user"`
+}
+
 func main() {
 	if err := loadDotEnvIfPresent(".env"); err != nil {
 		log.Fatalf("config error: failed to load .env: %v", err)
@@ -113,6 +126,7 @@ func loadConfig() (config, error) {
 	cfg := config{
 		token:       strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN")),
 		backendURL:  strings.TrimRight(strings.TrimSpace(envOrDefault("BACKEND_URL", defaultBackendURL)), "/"),
+		appURL:      strings.TrimRight(strings.TrimSpace(envOrDefault("APP_URL", defaultAppURL)), "/"),
 		botAuth:     strings.TrimSpace(os.Getenv("TELEGRAM_BOT_AUTH_TOKEN")),
 		pollTimeout: parseDurationSeconds(os.Getenv("TELEGRAM_POLL_TIMEOUT_SECONDS"), defaultPollWait),
 	}
@@ -275,10 +289,14 @@ func (a *app) handleMessage(ctx context.Context, msg telegramMessage) {
 	case "/start":
 		code := parseStartCode(arg)
 		if code == "" {
-			a.sendMessage(ctx, msg.Chat.ID, "Привет! Для привязки аккаунта отправь команду:\n/link <CODE>\n\nКод получаешь в приложении через endpoint /api/v1/auth/telegram/link-code.")
+			a.sendLinkStatus(ctx, msg)
 			return
 		}
 		a.tryLink(ctx, msg, code)
+	case "/status":
+		a.sendLinkStatus(ctx, msg)
+	case "/help":
+		a.sendMessage(ctx, msg.Chat.ID, a.helpText())
 	case "/link":
 		if arg == "" {
 			a.sendMessage(ctx, msg.Chat.ID, "Использование: /link <CODE>")
@@ -286,7 +304,7 @@ func (a *app) handleMessage(ctx context.Context, msg telegramMessage) {
 		}
 		a.tryLink(ctx, msg, arg)
 	default:
-		a.sendMessage(ctx, msg.Chat.ID, "Поддерживаемые команды:\n/start\n/link <CODE>")
+		a.sendMessage(ctx, msg.Chat.ID, a.helpText())
 	}
 }
 
@@ -318,6 +336,81 @@ func parseStartCode(arg string) string {
 	return strings.TrimSpace(value)
 }
 
+func (a *app) helpText() string {
+	return strings.Join([]string{
+		"Доступные команды:",
+		"/start — проверить, привязан ли Telegram",
+		"/status — показать текущий статус привязки",
+		"/link <CODE> — привязать аккаунт по коду из приложения",
+	}, "\n")
+}
+
+func (a *app) sendLinkStatus(ctx context.Context, msg telegramMessage) {
+	status, statusCode, backendErr := a.getTelegramStatus(ctx, msg.From.ID)
+	if statusCode == http.StatusOK {
+		if status.Linked {
+			a.sendMessage(ctx, msg.Chat.ID, a.alreadyLinkedText(status.User))
+			return
+		}
+		a.sendMessage(ctx, msg.Chat.ID, a.notLinkedText())
+		return
+	}
+
+	if statusCode == http.StatusUnauthorized || statusCode == http.StatusServiceUnavailable {
+		log.Printf("telegram status check rejected (status=%d): %s", statusCode, backendErr)
+		a.sendMessage(ctx, msg.Chat.ID, "Интеграция Telegram временно недоступна. Попробуй позже.")
+		return
+	}
+
+	log.Printf("telegram status check failed (status=%d): %s", statusCode, backendErr)
+	a.sendMessage(ctx, msg.Chat.ID, "Не удалось проверить статус привязки. Попробуй позже.")
+}
+
+func (a *app) notLinkedText() string {
+	lines := []string{
+		"Telegram пока не привязан к аккаунту.",
+		"",
+		"Что сделать:",
+	}
+
+	if a.cfg.appURL != "" {
+		lines = append(lines, "1) Открой приложение: "+a.cfg.appURL)
+		lines = append(lines, "2) Войди в аккаунт")
+		lines = append(lines, "3) В профиле открой блок Telegram и сгенерируй код")
+		lines = append(lines, "4) Отправь сюда: /link <CODE>")
+	} else {
+		lines = append(lines, "1) Войди в приложение")
+		lines = append(lines, "2) В профиле открой блок Telegram и сгенерируй код")
+		lines = append(lines, "3) Отправь сюда: /link <CODE>")
+	}
+
+	lines = append(lines, "", "Пример: /link ABCD2345")
+	return strings.Join(lines, "\n")
+}
+
+func (a *app) alreadyLinkedText(user *backendLinkedUser) string {
+	if user == nil {
+		return strings.Join([]string{
+			"Telegram уже привязан к аккаунту.",
+			"Если нужно перепривязать — сначала отвяжи Telegram в профиле приложения.",
+		}, "\n")
+	}
+
+	userLabel := strings.TrimSpace(user.Name)
+	if userLabel == "" {
+		userLabel = strings.TrimSpace(user.Email)
+	}
+	if userLabel == "" {
+		userLabel = "аккаунт"
+	}
+
+	return strings.Join([]string{
+		"Telegram уже привязан.",
+		fmt.Sprintf("Аккаунт: %s", userLabel),
+		"Если нужно перепривязать — сначала отвяжи Telegram в профиле приложения, потом отправь новый /link код.",
+	}, "\n")
+}
+
 func (a *app) tryLink(ctx context.Context, msg telegramMessage, rawCode string) {
 	code := strings.ToUpper(strings.TrimSpace(rawCode))
 	if code == "" {
@@ -325,7 +418,18 @@ func (a *app) tryLink(ctx context.Context, msg telegramMessage, rawCode string) 
 		return
 	}
 
-	statusCode, backendErr := a.linkTelegram(ctx, backendTelegramLinkRequest{
+	status, statusCode, backendErr := a.getTelegramStatus(ctx, msg.From.ID)
+	if statusCode == http.StatusOK && status.Linked {
+		a.sendMessage(ctx, msg.Chat.ID, a.alreadyLinkedText(status.User))
+		return
+	}
+	if statusCode != http.StatusOK && statusCode != http.StatusNotFound && statusCode != http.StatusBadRequest {
+		log.Printf("telegram status check before link failed (status=%d): %s", statusCode, backendErr)
+		a.sendMessage(ctx, msg.Chat.ID, "Не удалось проверить текущую привязку. Попробуй позже.")
+		return
+	}
+
+	statusCode, backendErr = a.linkTelegram(ctx, backendTelegramLinkRequest{
 		Code:             code,
 		TelegramUserID:   msg.From.ID,
 		TelegramUsername: msg.From.Username,
@@ -334,15 +438,58 @@ func (a *app) tryLink(ctx context.Context, msg telegramMessage, rawCode string) 
 	})
 	switch statusCode {
 	case http.StatusOK:
+		linkedStatus, linkedStatusCode, linkedErr := a.getTelegramStatus(ctx, msg.From.ID)
+		if linkedStatusCode == http.StatusOK && linkedStatus.Linked {
+			a.sendMessage(ctx, msg.Chat.ID, "Готово. "+a.alreadyLinkedText(linkedStatus.User))
+			return
+		}
+		if linkedStatusCode != http.StatusOK {
+			log.Printf("telegram status check after link failed (status=%d): %s", linkedStatusCode, linkedErr)
+		}
 		a.sendMessage(ctx, msg.Chat.ID, "Готово. Telegram аккаунт успешно привязан.")
 	case http.StatusBadRequest:
 		a.sendMessage(ctx, msg.Chat.ID, "Код недействителен или истек. Запроси новый код в приложении.")
 	case http.StatusConflict:
-		a.sendMessage(ctx, msg.Chat.ID, "Этот Telegram уже привязан к другому пользователю.")
+		a.sendMessage(ctx, msg.Chat.ID, "Этот Telegram уже привязан к другому пользователю. Сначала отвяжи его в профиле того аккаунта.")
 	default:
 		log.Printf("telegram link failed (status=%d): %s", statusCode, backendErr)
 		a.sendMessage(ctx, msg.Chat.ID, "Не удалось привязать аккаунт. Попробуй позже.")
 	}
+}
+
+func (a *app) getTelegramStatus(ctx context.Context, telegramUserID int64) (backendTelegramStatusResponse, int, string) {
+	if telegramUserID <= 0 {
+		return backendTelegramStatusResponse{}, http.StatusBadRequest, "telegram_user_id is invalid"
+	}
+
+	statusURL := fmt.Sprintf("%s/api/v1/integrations/telegram/status?telegram_user_id=%d", a.cfg.backendURL, telegramUserID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, statusURL, nil)
+	if err != nil {
+		return backendTelegramStatusResponse{}, 0, err.Error()
+	}
+	req.Header.Set("X-Telegram-Bot-Auth", a.cfg.botAuth)
+
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return backendTelegramStatusResponse{}, 0, err.Error()
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		var payload backendTelegramStatusResponse
+		if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+			return backendTelegramStatusResponse{}, resp.StatusCode, err.Error()
+		}
+		return payload, resp.StatusCode, ""
+	}
+
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	var parsed backendErrorResponse
+	if err := json.Unmarshal(raw, &parsed); err == nil && parsed.Error != "" {
+		return backendTelegramStatusResponse{}, resp.StatusCode, parsed.Error
+	}
+
+	return backendTelegramStatusResponse{}, resp.StatusCode, strings.TrimSpace(string(raw))
 }
 
 func (a *app) linkTelegram(ctx context.Context, payload backendTelegramLinkRequest) (int, string) {

@@ -21,6 +21,7 @@ func NewRouter(handler *handlers.Handler, corsOrigin string, jwtSecret string) *
 	router.GET("/health", handler.Health)
 	router.POST("/api/v1/auth/dev-login", handler.DevLogin)
 	router.POST("/api/v1/integrations/telegram/link", handler.TelegramLinkByCode)
+	router.GET("/api/v1/integrations/telegram/status", handler.TelegramStatusByUserID)
 
 	api := router.Group("/api/v1")
 	api.Use(middleware.RequireUserID(jwtSecret))

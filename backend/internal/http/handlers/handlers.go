@@ -25,6 +25,7 @@ type Repository interface {
 	CreateTelegramLinkCode(ctx context.Context, userID string, ttl time.Duration) (string, time.Time, error)
 	LinkTelegramByCode(ctx context.Context, input postgresql.TelegramLinkInput) (domain.User, error)
 	GetTelegramIdentity(ctx context.Context, userID string) (domain.TelegramIdentity, error)
+	GetUserByTelegramUserID(ctx context.Context, telegramUserID int64) (domain.User, error)
 	UnlinkTelegram(ctx context.Context, userID string) error
 	CreateGoal(ctx context.Context, userID string, input postgresql.CreateGoalInput) (domain.Goal, error)
 	ListGoals(ctx context.Context, userID string) ([]domain.Goal, error)
@@ -167,6 +168,45 @@ func (h *Handler) UnlinkTelegram(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"unlinked": true})
+}
+
+func (h *Handler) TelegramStatusByUserID(c *gin.Context) {
+	if h.telegramBotAuthToken == "" {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "telegram integration is not configured"})
+		return
+	}
+
+	botAuthToken := strings.TrimSpace(c.GetHeader(telegramBotAuthHeader))
+	if subtle.ConstantTimeCompare([]byte(botAuthToken), []byte(h.telegramBotAuthToken)) != 1 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid bot auth token"})
+		return
+	}
+
+	rawTelegramUserID := strings.TrimSpace(c.Query("telegram_user_id"))
+	telegramUserID, err := strconv.ParseInt(rawTelegramUserID, 10, 64)
+	if err != nil || telegramUserID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "telegram_user_id must be a positive integer"})
+		return
+	}
+
+	user, err := h.repo.GetUserByTelegramUserID(c.Request.Context(), telegramUserID)
+	if errors.Is(err, postgresql.ErrNotFound) {
+		c.JSON(http.StatusOK, gin.H{"linked": false})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve telegram link status"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"linked": true,
+		"user": gin.H{
+			"id":    user.ID,
+			"name":  user.Name,
+			"email": user.Email,
+		},
+	})
 }
 
 type telegramLinkByCodeRequest struct {

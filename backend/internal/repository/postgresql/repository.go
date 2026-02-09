@@ -265,6 +265,32 @@ func (r *Repository) GetTelegramIdentity(ctx context.Context, userID string) (do
 	return identity, nil
 }
 
+func (r *Repository) GetUserByTelegramUserID(ctx context.Context, telegramUserID int64) (domain.User, error) {
+	const query = `
+		SELECT u.id, u.email, u.name, u.nectar_balance, u.total_nectar_earned, u.created_at
+		FROM telegram_identities ti
+		JOIN users u ON u.id = ti.user_id
+		WHERE ti.telegram_user_id = $1
+	`
+
+	var user domain.User
+	if err := r.pool.QueryRow(ctx, query, telegramUserID).Scan(
+		&user.ID,
+		&user.Email,
+		&user.Name,
+		&user.NectarBalance,
+		&user.TotalNectarEarned,
+		&user.CreatedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.User{}, ErrNotFound
+		}
+		return domain.User{}, fmt.Errorf("get user by telegram user id: %w", err)
+	}
+
+	return user, nil
+}
+
 func (r *Repository) UnlinkTelegram(ctx context.Context, userID string) error {
 	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {

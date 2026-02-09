@@ -19,6 +19,7 @@ Required env vars:
 Optional:
 
 - `BACKEND_URL` (default `http://localhost:8080`)
+- `APP_URL` (default `http://localhost:5173`)
 - `TELEGRAM_POLL_TIMEOUT_SECONDS` (default `30`)
 
 ## Auth Link Flow
@@ -39,3 +40,11 @@ curl -X POST http://localhost:8080/api/v1/auth/telegram/link-code \
 3. Bot calls:
 
 - `POST /api/v1/integrations/telegram/link` with header `X-Telegram-Bot-Auth`.
+- `GET /api/v1/integrations/telegram/status?telegram_user_id=<id>` with header `X-Telegram-Bot-Auth` to check if Telegram is already linked.
+
+## Commands
+
+- `/start` - check link status and show onboarding steps
+- `/status` - show current link status
+- `/link <CODE>` - link Telegram using one-time code from app profile
+- `/help` - list commands
