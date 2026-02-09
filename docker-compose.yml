@@ -17,5 +17,53 @@ services:
       timeout: 5s
       retries: 5
 
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mathalama-focus-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ./backend/.env
+    environment:
+      PORT: "8080"
+      DATABASE_URL: postgres://mathalama:mathalama@postgres:5432/mathalama?sslmode=disable
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  telegram-bot:
+    build:
+      context: ./telegram-bot
+      dockerfile: Dockerfile
+    container_name: mathalama-focus-telegram-bot
+    depends_on:
+      backend:
+        condition: service_healthy
+    env_file:
+      - ./telegram-bot/.env
+    environment:
+      BACKEND_URL: http://backend:8080
+      APP_URL: http://localhost:5173
+      BOT_INTERNAL_API_ADDR: ":8091"
+    ports:
+      - "8091:8091"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8091/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# Frontend intentionally runs outside Docker:
+# cd frontend && npm install && npm run dev
+
 volumes:
   focus_pg_data:

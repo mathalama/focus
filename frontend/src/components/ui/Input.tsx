@@ -1,5 +1,5 @@
 import React from 'react';
-import { cn } from './Button'; // reuse cn
+import { cn } from '../../lib/cn'; // reuse cn
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {}
 

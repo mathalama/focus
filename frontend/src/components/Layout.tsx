@@ -2,7 +2,7 @@ import React from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LayoutDashboard, BarChart3, LogOut, Trophy, Activity, UserRound, Languages, History } from 'lucide-react';
-import { cn } from './ui/Button';
+import { cn } from '../lib/cn';
 import { useLanguage } from '../context/LanguageContext';
 import { useI18n } from '../lib/i18n';
 

@@ -2,7 +2,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
-import { api, SessionHistoryEntry, SessionHistorySummary } from '../lib/api';
+import { api } from '../api';
+import type { SessionHistoryEntry, SessionHistorySummary } from '../types';
+import { MetricCard } from '../components/history/MetricCard';
 import { getLocale, useI18n } from '../lib/i18n';
 import { Clock3, Filter, ListChecks, Sigma } from 'lucide-react';
 
@@ -157,7 +159,7 @@ export const HistoryPage: React.FC = () => {
       <div className="grid gap-4 md:grid-cols-3">
         <MetricCard icon={ListChecks} label={t('history.metric.closedCount')} value={summary.completed_count} />
         <MetricCard icon={Clock3} label={t('history.metric.totalMinutes')} value={summary.total_minutes} suffix="m" />
-        <MetricCard icon={Sigma} label={t('history.metric.avgMinutes')} value={summary.average_minutes} suffix="m" />
+        <MetricCard icon={Sigma} label={t('history.metric.avgMinutes')} value={Math.round(summary.average_minutes * 10) / 10} suffix="m" />
       </div>
 
       <Card className="border-border bg-surface shadow-none">
@@ -202,20 +204,5 @@ export const HistoryPage: React.FC = () => {
         )}
       </Card>
     </div>
-  );
-};
-
-const MetricCard: React.FC<{ icon: any; label: string; value: number; suffix?: string }> = ({ icon: Icon, label, value, suffix }) => {
-  return (
-    <Card className="border-border bg-surface p-5 shadow-none">
-      <div className="mb-2 flex h-8 w-8 items-center justify-center rounded bg-surfaceHighlight">
-        <Icon size={15} className="text-primary" />
-      </div>
-      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</p>
-      <p className="mt-1 text-2xl font-mono font-bold text-primary">
-        {value}
-        {suffix ? <span className="ml-1 text-xs text-muted-foreground">{suffix}</span> : null}
-      </p>
-    </Card>
   );
 };

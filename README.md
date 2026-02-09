@@ -9,12 +9,14 @@ Calm-first learning focus mode, not a productivity pressure timer.
 
 ## Product Flow (MVP)
 
-1. Dev auth login
-2. Create goal (`topic + desired result + recommended mode`)
-3. Start focus session from a goal
-4. Pause/resume with pause limit and interruption tracking
-5. Complete session and submit mandatory reflection
-6. View calm analytics overview
+1. Register account (email + password)
+2. Verify email from inbox link
+3. Login with verified account
+4. Create goal (`topic + desired result + recommended mode`)
+5. Start focus session from a goal
+6. Pause/resume with pause limit and interruption tracking
+7. Complete session and submit mandatory reflection
+8. View calm analytics overview
 
 ## Project Structure
 
@@ -77,6 +79,12 @@ Frontend default: `http://localhost:5173`
 - `DATABASE_URL=postgres://mathalama:mathalama@localhost:5432/mathalama?sslmode=disable`
 - `CORS_ORIGIN=http://localhost:5173`
 - `MAX_SESSION_PAUSES=3`
+- `RESEND_API_KEY=`
+- `RESEND_FROM_EMAIL=`
+- `EMAIL_VERIFY_URL_BASE=http://localhost:8080/api/v1/auth/verify-email`
+- `EMAIL_VERIFY_SUCCESS_REDIRECT=http://localhost:5173/login?verified=1`
+- `EMAIL_VERIFY_FAIL_REDIRECT=http://localhost:5173/login?verified=0`
+- `EMAIL_VERIFICATION_TTL_MINUTES=60`
 - `TELEGRAM_BOT_AUTH_TOKEN=dev-telegram-bot-auth-change-me`
 - `TELEGRAM_LINK_CODE_TTL_MINUTES=10`
 
@@ -87,6 +95,10 @@ Frontend default: `http://localhost:5173`
 ## API (MVP)
 
 - `GET /health`
+- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/verify-email/resend`
+- `GET /api/v1/auth/verify-email?token=...`
 - `POST /api/v1/auth/dev-login`
 - `POST /api/v1/auth/telegram/link-code` (Bearer)
 - `POST /api/v1/integrations/telegram/link` (`X-Telegram-Bot-Auth`)
@@ -106,7 +118,8 @@ Frontend default: `http://localhost:5173`
 
 ## Notes
 
-- Auth in this scaffold is dev-mode (`/auth/dev-login`) that returns a user ID.
+- Production auth flow is email/password with verification via Resend.
+- Dev auth (`/auth/dev-login`) is still available for local development.
 - Protected endpoints require header: `Authorization: Bearer <jwt_token>`.
 - Reflection is mandatory in the UI after session completion.
 

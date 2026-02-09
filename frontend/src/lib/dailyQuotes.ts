@@ -7,6 +7,7 @@ export interface DailyQuote {
 
 const quotesByLanguage: Record<AppLanguage, DailyQuote[]> = {
   en: [
+    { text: "Don't practice to compete. Practice to dominate.", author: 'Unknown' },
     { text: 'Knowing yourself is the beginning of all wisdom.', author: 'Aristotle' },
     { text: 'The future depends on what you do today.', author: 'Mahatma Gandhi' },
     { text: 'It always seems impossible until it is done.', author: 'Nelson Mandela' },
@@ -23,6 +24,7 @@ const quotesByLanguage: Record<AppLanguage, DailyQuote[]> = {
     { text: 'A nation without discipline cannot stand.', author: 'Bauyrzhan Momyshuly' },
   ],
   ru: [
+    { text: 'Тренируйся не для конкуренции. Тренируйся, чтобы доминировать.', author: 'Неизвестный' },
     { text: 'Познание себя — начало всякой мудрости.', author: 'Аристотель' },
     { text: 'Будущее зависит от того, что вы делаете сегодня.', author: 'Махатма Ганди' },
     { text: 'Пока не сделано, всё кажется невозможным.', author: 'Нельсон Мандела' },
@@ -39,6 +41,7 @@ const quotesByLanguage: Record<AppLanguage, DailyQuote[]> = {
     { text: 'Народ без дисциплины не устоит.', author: 'Бауыржан Момышулы' },
   ],
   kk: [
+    { text: 'Жаттығуды бәсекелесу үшін жасама. Үстем болу үшін жаттық.', author: 'Белгісіз' },
     { text: 'Адамзаттың бәрін сүй, бауырым деп.', author: 'Абай Құнанбайұлы' },
     { text: 'Ғылым таппай мақтанба.', author: 'Абай Құнанбайұлы' },
     { text: 'Сен де бір кірпіш дүниеге, кетігін тап та, бар, қалан.', author: 'Абай Құнанбайұлы' },

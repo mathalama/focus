@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -16,6 +17,12 @@ type Config struct {
 	MaxSessionPauses           int
 	TelegramBotAuthToken       string
 	TelegramLinkCodeTTLMinutes int
+	ResendAPIKey               string
+	ResendFromEmail            string
+	EmailVerifyURLBase         string
+	EmailVerifySuccessRedirect string
+	EmailVerifyFailRedirect    string
+	EmailVerificationTTLMin    int
 }
 
 func Load() (Config, error) {
@@ -29,10 +36,19 @@ func Load() (Config, error) {
 		MaxSessionPauses:           intOrDefault("MAX_SESSION_PAUSES", 3),
 		TelegramBotAuthToken:       envOrDefault("TELEGRAM_BOT_AUTH_TOKEN", "dev-telegram-bot-auth-change-me"),
 		TelegramLinkCodeTTLMinutes: intOrDefault("TELEGRAM_LINK_CODE_TTL_MINUTES", 10),
+		ResendAPIKey:               strings.TrimSpace(os.Getenv("RESEND_API_KEY")),
+		ResendFromEmail:            strings.TrimSpace(os.Getenv("RESEND_FROM_EMAIL")),
+		EmailVerifyURLBase:         strings.TrimSpace(envOrDefault("EMAIL_VERIFY_URL_BASE", "http://localhost:8080/api/v1/auth/verify-email")),
+		EmailVerifySuccessRedirect: strings.TrimSpace(envOrDefault("EMAIL_VERIFY_SUCCESS_REDIRECT", "http://localhost:5173/login?verified=1")),
+		EmailVerifyFailRedirect:    strings.TrimSpace(envOrDefault("EMAIL_VERIFY_FAIL_REDIRECT", "http://localhost:5173/login?verified=0")),
+		EmailVerificationTTLMin:    intOrDefault("EMAIL_VERIFICATION_TTL_MINUTES", 60),
 	}
 
 	if cfg.TelegramLinkCodeTTLMinutes <= 0 {
 		cfg.TelegramLinkCodeTTLMinutes = 10
+	}
+	if cfg.EmailVerificationTTLMin <= 0 {
+		cfg.EmailVerificationTTLMin = 60
 	}
 
 	if cfg.DatabaseURL == "" {

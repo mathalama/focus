@@ -131,3 +131,9 @@ type Insight struct {
 	Content string `json:"content"`
 	Type    string `json:"type"` // 'tip', 'warning', 'encouragement'
 }
+
+type AuthUser struct {
+	User            User       `json:"-"`
+	PasswordHash    string     `json:"-"`
+	EmailVerifiedAt *time.Time `json:"-"`
+}

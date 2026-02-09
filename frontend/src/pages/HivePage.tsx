@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { api, LeaderboardEntry } from '../lib/api';
+import { api } from '../api';
+import type { LeaderboardEntry } from '../types';
 import { Card } from '../components/ui/Card';
 import { useAuth } from '../context/AuthContext';
-import { cn } from '../components/ui/Button';
+import { cn } from '../lib/cn';
 import { Trophy } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 
@@ -10,16 +11,27 @@ export const HivePage: React.FC = () => {
   const { t } = useI18n();
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
 
   useEffect(() => {
     api.gamification.leaderboard()
       .then(data => setEntries(data.leaderboard || []))
-      .catch(console.error)
+      .catch((err) => {
+        console.error(err);
+        setError(err instanceof Error ? err.message : t('hive.error'));
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [t]);
 
   if (loading) return <div className="text-xs font-mono text-muted-foreground">{t('hive.loading')}</div>;
+
+  if (error) return (
+    <div className="space-y-4">
+      <h1 className="text-2xl font-bold tracking-tight font-mono uppercase text-primary">{t('hive.title')}</h1>
+      <div className="rounded-lg border border-red-500/30 bg-red-950/20 px-4 py-3 text-xs font-mono text-red-400">{error}</div>
+    </div>
+  );
 
   return (
     <div className="space-y-6">

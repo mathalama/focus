@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { api, FocusSession } from '../lib/api';
+import { api } from '../api';
+import type { FocusSession } from '../types';
 import { Button } from '../components/ui/Button';
 import { Play, Pause, CheckCircle, AlertOctagon, Coffee, BatteryCharging } from 'lucide-react';
 import { motion } from 'framer-motion';

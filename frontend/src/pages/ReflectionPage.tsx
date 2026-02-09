@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { api } from '../lib/api';
+import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -17,11 +17,13 @@ export const ReflectionPage: React.FC = () => {
   const [hard, setHard] = useState('');
   const [next, setNext] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sessionId) return;
     setLoading(true);
+    setError(null);
     try {
       await api.sessions.reflection(sessionId, {
         what_learned: learned,
@@ -32,6 +34,7 @@ export const ReflectionPage: React.FC = () => {
       navigate('/hive');
     } catch (err) {
       console.error(err);
+      setError(err instanceof Error ? err.message : t('reflection.error'));
     } finally {
       setLoading(false);
     }
@@ -88,6 +91,12 @@ export const ReflectionPage: React.FC = () => {
             <Button type="submit" className="w-full" size="lg" disabled={loading}>
               {loading ? t('reflection.saving') : t('reflection.collect')}
             </Button>
+
+            {error && (
+              <div className="rounded-lg border border-red-500/30 bg-red-950/20 px-4 py-2 text-xs font-mono text-red-400 animate-in fade-in">
+                {error}
+              </div>
+            )}
           </form>
         </Card>
       </motion.div>

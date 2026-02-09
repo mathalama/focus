@@ -9,6 +9,8 @@ frontend/dist
 
 # Backend build artifacts
 backend/api
+telegram-bot/bot
 
 # Logs
 *.log
+.vscode/

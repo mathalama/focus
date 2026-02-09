@@ -10,10 +10,11 @@ import (
 	"time"
 
 	"mathalama-focus/backend/internal/config"
-	"mathalama-focus/backend/internal/db"
-	httpapi "mathalama-focus/backend/internal/http"
-	"mathalama-focus/backend/internal/http/handlers"
-	"mathalama-focus/backend/internal/repository/postgresql"
+	"mathalama-focus/backend/internal/delivery/httpapi"
+	"mathalama-focus/backend/internal/infrastructure/email"
+	"mathalama-focus/backend/internal/infrastructure/jwt"
+	"mathalama-focus/backend/internal/infrastructure/postgres"
+	"mathalama-focus/backend/internal/usecase"
 )
 
 func main() {
@@ -25,20 +26,38 @@ func main() {
 		log.Fatalf("config error: %v", err)
 	}
 
-	pool, err := db.NewPool(ctx, cfg.DatabaseURL)
+	// Infrastructure
+	pool, err := postgres.NewPool(ctx, cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("database error: %v", err)
 	}
 	defer pool.Close()
 
-	repo := postgresql.New(pool, cfg.MaxSessionPauses)
-	handler := handlers.New(
-		repo,
-		cfg.JWTSecret,
-		time.Duration(cfg.TelegramLinkCodeTTLMinutes)*time.Minute,
-		cfg.TelegramBotAuthToken,
+	repo := postgres.NewRepository(pool, cfg.MaxSessionPauses)
+	jwtSvc := jwt.NewService(cfg.JWTSecret)
+
+	var emailSvc usecase.EmailService
+	if cfg.ResendAPIKey != "" && cfg.ResendFromEmail != "" {
+		emailSvc = email.NewResendService(cfg.ResendAPIKey, cfg.ResendFromEmail, cfg.EmailVerificationTTLMin)
+	}
+
+	// Use cases
+	authUC := usecase.NewAuthUseCase(
+		repo, jwtSvc, emailSvc,
+		time.Duration(cfg.EmailVerificationTTLMin)*time.Minute,
+		cfg.EmailVerifyURLBase,
+		cfg.EmailVerifySuccessRedirect,
+		cfg.EmailVerifyFailRedirect,
 	)
-	router := httpapi.NewRouter(handler, cfg.CorsOrigin, cfg.JWTSecret)
+	sessionUC := usecase.NewSessionUseCase(repo)
+	goalUC := usecase.NewGoalUseCase(repo)
+	analyticsUC := usecase.NewAnalyticsUseCase(repo, repo)
+	shopUC := usecase.NewShopUseCase(repo)
+	telegramUC := usecase.NewTelegramUseCase(repo, time.Duration(cfg.TelegramLinkCodeTTLMinutes)*time.Minute)
+
+	// Delivery
+	handler := httpapi.NewHandler(authUC, sessionUC, goalUC, analyticsUC, shopUC, telegramUC, cfg.TelegramBotAuthToken)
+	router := httpapi.NewRouter(handler, cfg.CorsOrigin, jwtSvc.ValidateToken)
 
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%s", cfg.Port),

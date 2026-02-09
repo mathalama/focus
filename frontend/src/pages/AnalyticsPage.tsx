@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { api, AnalyticsOverview, DailyActivity, DailyContribution } from '../lib/api';
+import { api } from '../api';
+import type { AnalyticsOverview, DailyActivity, DailyContribution } from '../types';
 import { Card } from '../components/ui/Card';
+import { StatCard } from '../components/analytics/StatCard';
 import { Target, Zap, Activity, Award } from 'lucide-react';
 import { addDays, differenceInCalendarDays, eachDayOfInterval, format, startOfWeek, subDays } from 'date-fns';
 import { getLocale, useI18n } from '../lib/i18n';
@@ -26,6 +28,7 @@ export const AnalyticsPage: React.FC = () => {
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
   const [activity, setActivity] = useState<DailyActivity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   useEffect(() => {
@@ -35,11 +38,21 @@ export const AnalyticsPage: React.FC = () => {
     ]).then(([overviewData, activityData]) => {
       setOverview(overviewData.overview);
       setActivity(Array.isArray(activityData.activity) ? activityData.activity : []);
-    }).catch(console.error)
+    }).catch((err) => {
+      console.error(err);
+      setError(err instanceof Error ? err.message : t('analytics.error'));
+    })
       .finally(() => setLoading(false));
-  }, [timezone]);
+  }, [timezone, t]);
 
   if (loading) return <div className="text-xs font-mono text-muted-foreground">{t('analytics.loading')}</div>;
+
+  if (error) return (
+    <div className="space-y-4">
+      <h1 className="text-2xl font-bold tracking-tight font-mono uppercase text-primary">{t('analytics.title')}</h1>
+      <div className="rounded-lg border border-red-500/30 bg-red-950/20 px-4 py-3 text-xs font-mono text-red-400">{error}</div>
+    </div>
+  );
 
   // All date grid computations are done once per activity change (stable dep)
   return <AnalyticsContent overview={overview} activity={activity} />;
@@ -261,13 +274,13 @@ const AnalyticsContent: React.FC<{
         <StatCard 
           icon={Zap} 
           label={t('analytics.focusScore')} 
-          value={overview?.calm_score ?? 0} 
+          value={Math.round(overview?.calm_score ?? 0)} 
           suffix="/ 100"
         />
         <StatCard 
           icon={Activity} 
           label={t('analytics.stability')} 
-          value={overview?.focus_stability ?? 0} 
+          value={Math.round(overview?.focus_stability ?? 0)} 
           suffix="%"
         />
         <StatCard 
@@ -401,16 +414,3 @@ const AnalyticsContent: React.FC<{
     </div>
   );
 };
-
-const StatCard: React.FC<{ icon: any, label: string, value: number, suffix?: string, className?: string }> = ({ icon: Icon, label, value, suffix, className }) => (
-  <Card className="flex flex-col items-start p-5 bg-surface border-border shadow-none transition-colors hover:bg-surfaceHighlight/50">
-    <div className={`mb-3 flex h-8 w-8 items-center justify-center rounded bg-surfaceHighlight ${className}`}>
-      <Icon size={16} className="text-primary" />
-    </div>
-    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</span>
-    <div className="mt-1 flex items-baseline gap-1">
-      <span className="text-2xl font-bold tracking-tight text-primary font-mono">{value}</span>
-      {suffix && <span className="text-xs text-muted-foreground font-mono">{suffix}</span>}
-    </div>
-  </Card>
-);
