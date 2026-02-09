@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -13,6 +14,10 @@ import (
 	"github.com/google/uuid"
 )
 
+type DBKeepAlive interface {
+	KeepAlive(ctx context.Context) error
+}
+
 // Handler groups all HTTP handlers and their use-case dependencies.
 type Handler struct {
 	auth                 *usecase.AuthUseCase
@@ -21,6 +26,7 @@ type Handler struct {
 	analytics            *usecase.AnalyticsUseCase
 	shop                 *usecase.ShopUseCase
 	telegram             *usecase.TelegramUseCase
+	dbKeepAlive          DBKeepAlive
 	telegramBotAuthToken string
 }
 
@@ -32,6 +38,7 @@ func NewHandler(
 	analytics *usecase.AnalyticsUseCase,
 	shop *usecase.ShopUseCase,
 	telegram *usecase.TelegramUseCase,
+	dbKeepAlive DBKeepAlive,
 	telegramBotAuthToken string,
 ) *Handler {
 	return &Handler{
@@ -41,6 +48,7 @@ func NewHandler(
 		analytics:            analytics,
 		shop:                 shop,
 		telegram:             telegram,
+		dbKeepAlive:          dbKeepAlive,
 		telegramBotAuthToken: strings.TrimSpace(telegramBotAuthToken),
 	}
 }
