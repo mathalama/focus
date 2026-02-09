@@ -15,7 +15,8 @@ export const SessionPage: React.FC = () => {
   const [completedCount, setCompletedCount] = useState(0);
   const sessionRef = useRef<FocusSession | null>(null);
   const [timeLeft, setTimeLeft] = useState(0); 
-  const [breakTime, setBreakTime] = useState(0); // Local break timer in seconds
+  const [breakTime, setBreakTime] = useState(0);
+  const [breakDurationSeconds, setBreakDurationSeconds] = useState(0);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -106,6 +107,7 @@ export const SessionPage: React.FC = () => {
 
       if (nextSession.status === 'active') {
         setBreakTime(0);
+        setBreakDurationSeconds(0);
       }
 
       if (nextSession.status === 'completed') {
@@ -164,11 +166,13 @@ export const SessionPage: React.FC = () => {
         case 'pause': res = await api.sessions.pause(sessionId); break;
         case 'resume': 
           res = await api.sessions.resume(sessionId); 
-          setBreakTime(0); // Clear break timer on resume
+          setBreakTime(0);
+          setBreakDurationSeconds(0);
           break;
         case 'reset': 
           res = await api.sessions.reset(sessionId); 
           setBreakTime(0);
+          setBreakDurationSeconds(0);
           break;
         case 'abandon': res = await api.sessions.abandon(sessionId); break;
         case 'complete': res = await api.sessions.complete(sessionId); break;
@@ -195,7 +199,9 @@ export const SessionPage: React.FC = () => {
   };
 
   const startBreak = (minutes: number) => {
-    setBreakTime(minutes * 60);
+    const seconds = minutes * 60;
+    setBreakDurationSeconds(seconds);
+    setBreakTime(seconds);
   };
 
   if (loading) return <div className="flex h-screen items-center justify-center font-mono text-xs">{t('session.initializing')}</div>;
@@ -212,8 +218,9 @@ export const SessionPage: React.FC = () => {
   // Progress Ring Logic
   const R = 120;
   const C = 2 * Math.PI * R;
-  let totalSeconds = session.recommended_minutes * 60;
-  if (breakTime > 0) totalSeconds = breakTime; 
+  const totalSeconds = breakTime > 0
+    ? breakDurationSeconds || breakTime
+    : session.recommended_minutes * 60;
   
   const progress = totalSeconds > 0 ? displayTime / totalSeconds : 0;
   const dashOffset = C * (1 - progress);
@@ -254,7 +261,7 @@ export const SessionPage: React.FC = () => {
               stroke="currentColor"
               strokeWidth="4"
               strokeDasharray={C}
-              strokeDashoffset={dashOffset} // This visual might be jumpy for breaks without tracking total break time, but acceptable for MVP
+              strokeDashoffset={dashOffset}
               strokeLinecap="round"
               className={`transition-all duration-1000 ease-linear shadow-glow ${isBreak ? 'text-green-500' : 'text-accent'}`}
             />
