@@ -24,6 +24,8 @@ type Repository interface {
 	DevLogin(ctx context.Context, email, name string) (domain.User, error)
 	CreateTelegramLinkCode(ctx context.Context, userID string, ttl time.Duration) (string, time.Time, error)
 	LinkTelegramByCode(ctx context.Context, input postgresql.TelegramLinkInput) (domain.User, error)
+	GetTelegramIdentity(ctx context.Context, userID string) (domain.TelegramIdentity, error)
+	UnlinkTelegram(ctx context.Context, userID string) error
 	CreateGoal(ctx context.Context, userID string, input postgresql.CreateGoalInput) (domain.Goal, error)
 	ListGoals(ctx context.Context, userID string) ([]domain.Goal, error)
 	ListGoalHistory(ctx context.Context, userID string) ([]domain.Goal, error)
@@ -139,6 +141,32 @@ func (h *Handler) CreateTelegramLinkCode(c *gin.Context) {
 		"code":       code,
 		"expires_at": expiresAt.UTC(),
 	})
+}
+
+func (h *Handler) GetTelegramIdentity(c *gin.Context) {
+	userID := middleware.UserID(c)
+
+	identity, err := h.repo.GetTelegramIdentity(c.Request.Context(), userID)
+	if errors.Is(err, postgresql.ErrNotFound) {
+		c.JSON(http.StatusOK, gin.H{"identity": nil})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get telegram identity"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"identity": identity})
+}
+
+func (h *Handler) UnlinkTelegram(c *gin.Context) {
+	userID := middleware.UserID(c)
+	if err := h.repo.UnlinkTelegram(c.Request.Context(), userID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to unlink telegram account"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"unlinked": true})
 }
 
 type telegramLinkByCodeRequest struct {

@@ -125,6 +125,14 @@ export interface TelegramLinkCode {
   expires_at: string;
 }
 
+export interface TelegramIdentity {
+  telegram_user_id: number;
+  telegram_username: string;
+  telegram_first_name: string;
+  telegram_last_name: string;
+  linked_at: string;
+}
+
 const getAuthHeaders = (): Record<string, string> => {
   const token = localStorage.getItem('token');
   return token ? { 'Authorization': `Bearer ${token}` } : {};
@@ -183,6 +191,34 @@ export const api = {
           }
         } catch {
           // Ignore non-JSON errors and keep fallback message.
+        }
+        throw new Error(message);
+      }
+
+      return res.json();
+    },
+    getTelegramIdentity: async (): Promise<{ identity: TelegramIdentity | null }> => {
+      const res = await fetch(`${API_BASE_URL}/api/v1/integrations/telegram`, {
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) throw new Error('Failed to get Telegram status');
+      return res.json();
+    },
+    unlinkTelegram: async (): Promise<{ unlinked: boolean }> => {
+      const res = await fetch(`${API_BASE_URL}/api/v1/integrations/telegram`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+
+      if (!res.ok) {
+        let message = 'Failed to unlink Telegram account';
+        try {
+          const payload = await res.json();
+          if (typeof payload?.error === 'string' && payload.error.trim()) {
+            message = payload.error.trim();
+          }
+        } catch {
+          // Keep fallback message for non-JSON responses.
         }
         throw new Error(message);
       }

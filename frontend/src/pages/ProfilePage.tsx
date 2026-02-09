@@ -1,10 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { AppLanguage, useLanguage } from '../context/LanguageContext';
 import { Card } from '../components/ui/Card';
 import { Bell, Copy, ExternalLink, Globe, LoaderCircle, UserRound } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
-import { api } from '../lib/api';
+import { api, TelegramIdentity } from '../lib/api';
 import { Button } from '../components/ui/Button';
 
 const languageOptions: Array<{ value: AppLanguage; label: string }> = [
@@ -17,10 +17,13 @@ export const ProfilePage: React.FC = () => {
   const { user } = useAuth();
   const { language, setLanguage } = useLanguage();
   const { t, locale } = useI18n();
+  const [telegramIdentity, setTelegramIdentity] = useState<TelegramIdentity | null>(null);
   const [telegramCode, setTelegramCode] = useState<{ code: string; expiresAt: string } | null>(null);
   const [telegramNotice, setTelegramNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  const [isTelegramStatusLoading, setIsTelegramStatusLoading] = useState(true);
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [isCopyingCode, setIsCopyingCode] = useState(false);
+  const [isUnlinkingTelegram, setIsUnlinkingTelegram] = useState(false);
   const telegramBotUrl = (import.meta.env.VITE_TELEGRAM_BOT_URL ?? '').trim();
   const telegramBotHandleMatch = telegramBotUrl.match(/(?:t\.me\/|telegram\.me\/)([A-Za-z0-9_]+)/i);
   const telegramBotLabel = telegramBotHandleMatch ? `@${telegramBotHandleMatch[1]}` : telegramBotUrl;
@@ -41,6 +44,58 @@ export const ProfilePage: React.FC = () => {
     });
   }, [telegramCode?.expiresAt, locale]);
 
+  const telegramIdentityLabel = useMemo(() => {
+    if (!telegramIdentity) return '';
+
+    const username = telegramIdentity.telegram_username?.trim();
+    if (username) {
+      return `@${username}`;
+    }
+
+    const fullName = [telegramIdentity.telegram_first_name, telegramIdentity.telegram_last_name]
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .join(' ');
+    if (fullName) {
+      return fullName;
+    }
+
+    return String(telegramIdentity.telegram_user_id);
+  }, [telegramIdentity]);
+
+  const telegramLinkedAtLabel = useMemo(() => {
+    if (!telegramIdentity?.linked_at) return '';
+    const parsedDate = new Date(telegramIdentity.linked_at);
+    if (Number.isNaN(parsedDate.getTime())) {
+      return telegramIdentity.linked_at;
+    }
+    return parsedDate.toLocaleString(locale, {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }, [telegramIdentity?.linked_at, locale]);
+
+  const loadTelegramIdentity = useCallback(async () => {
+    setIsTelegramStatusLoading(true);
+    try {
+      const data = await api.auth.getTelegramIdentity();
+      setTelegramIdentity(data.identity ?? null);
+    } catch {
+      setTelegramNotice({
+        tone: 'error',
+        text: t('profile.telegram.notice.statusFailed'),
+      });
+    } finally {
+      setIsTelegramStatusLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    void loadTelegramIdentity();
+  }, [loadTelegramIdentity]);
+
   const handleGenerateTelegramCode = async () => {
     setIsGeneratingCode(true);
     setTelegramNotice(null);
@@ -49,7 +104,7 @@ export const ProfilePage: React.FC = () => {
       setTelegramCode({ code: data.code, expiresAt: data.expires_at });
       setTelegramNotice({
         tone: 'success',
-        text: t('profile.telegram.notice.generated'),
+        text: telegramIdentity ? t('profile.telegram.notice.relinkCodeGenerated') : t('profile.telegram.notice.generated'),
       });
     } catch (error) {
       setTelegramNotice({
@@ -60,6 +115,29 @@ export const ProfilePage: React.FC = () => {
       });
     } finally {
       setIsGeneratingCode(false);
+    }
+  };
+
+  const handleUnlinkTelegram = async () => {
+    setIsUnlinkingTelegram(true);
+    setTelegramNotice(null);
+    try {
+      await api.auth.unlinkTelegram();
+      setTelegramIdentity(null);
+      setTelegramCode(null);
+      setTelegramNotice({
+        tone: 'success',
+        text: t('profile.telegram.notice.unlinked'),
+      });
+    } catch (error) {
+      setTelegramNotice({
+        tone: 'error',
+        text: error instanceof Error && error.message.trim()
+          ? error.message
+          : t('profile.telegram.notice.unlinkFailed'),
+      });
+    } finally {
+      setIsUnlinkingTelegram(false);
     }
   };
 
@@ -154,6 +232,23 @@ export const ProfilePage: React.FC = () => {
           </p>
         )}
 
+        <div className="mb-5 rounded-xl border border-border bg-background px-4 py-3">
+          <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">
+            {t('profile.telegram.statusTitle')}
+          </p>
+          {isTelegramStatusLoading ? (
+            <p className="mt-1 text-xs text-muted-foreground">{t('profile.telegram.statusLoading')}</p>
+          ) : telegramIdentity ? (
+            <div className="mt-2 space-y-1 text-xs text-primary">
+              <p className="font-semibold text-emerald-600">{t('profile.telegram.statusLinked')}</p>
+              <p>{t('profile.telegram.statusLinkedAs', { value: telegramIdentityLabel })}</p>
+              <p className="text-muted-foreground">{t('profile.telegram.statusLinkedAt', { date: telegramLinkedAtLabel })}</p>
+            </div>
+          ) : (
+            <p className="mt-1 text-xs text-muted-foreground">{t('profile.telegram.statusNotLinked')}</p>
+          )}
+        </div>
+
         <div className="flex flex-wrap gap-3">
           <Button
             onClick={handleGenerateTelegramCode}
@@ -161,7 +256,11 @@ export const ProfilePage: React.FC = () => {
             className="min-w-[220px] gap-2"
           >
             {isGeneratingCode ? <LoaderCircle size={16} className="animate-spin" /> : null}
-            {isGeneratingCode ? t('profile.telegram.generating') : t('profile.telegram.generateCode')}
+            {isGeneratingCode
+              ? t('profile.telegram.generating')
+              : telegramIdentity
+                ? t('profile.telegram.relinkCode')
+                : t('profile.telegram.generateCode')}
           </Button>
 
           <Button
@@ -173,6 +272,18 @@ export const ProfilePage: React.FC = () => {
             {isCopyingCode ? <LoaderCircle size={16} className="animate-spin" /> : <Copy size={15} />}
             {t('profile.telegram.copyCommand')}
           </Button>
+
+          {telegramIdentity ? (
+            <Button
+              variant="outline"
+              onClick={handleUnlinkTelegram}
+              disabled={isUnlinkingTelegram}
+              className="gap-2"
+            >
+              {isUnlinkingTelegram ? <LoaderCircle size={16} className="animate-spin" /> : null}
+              {isUnlinkingTelegram ? t('profile.telegram.unlinking') : t('profile.telegram.unlink')}
+            </Button>
+          ) : null}
         </div>
 
         {telegramCode ? (

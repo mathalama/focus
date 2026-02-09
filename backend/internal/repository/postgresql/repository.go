@@ -241,6 +241,50 @@ func (r *Repository) LinkTelegramByCode(ctx context.Context, input TelegramLinkI
 	return user, nil
 }
 
+func (r *Repository) GetTelegramIdentity(ctx context.Context, userID string) (domain.TelegramIdentity, error) {
+	const query = `
+		SELECT telegram_user_id, telegram_username, telegram_first_name, telegram_last_name, linked_at
+		FROM telegram_identities
+		WHERE user_id = $1
+	`
+
+	var identity domain.TelegramIdentity
+	if err := r.pool.QueryRow(ctx, query, userID).Scan(
+		&identity.TelegramUserID,
+		&identity.TelegramUsername,
+		&identity.TelegramFirst,
+		&identity.TelegramLast,
+		&identity.LinkedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.TelegramIdentity{}, ErrNotFound
+		}
+		return domain.TelegramIdentity{}, fmt.Errorf("get telegram identity: %w", err)
+	}
+
+	return identity, nil
+}
+
+func (r *Repository) UnlinkTelegram(ctx context.Context, userID string) error {
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin unlink telegram tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, `DELETE FROM telegram_identities WHERE user_id = $1`, userID); err != nil {
+		return fmt.Errorf("delete telegram identity: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM telegram_link_codes WHERE user_id = $1`, userID); err != nil {
+		return fmt.Errorf("delete telegram link codes: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit unlink telegram tx: %w", err)
+	}
+	return nil
+}
+
 func (r *Repository) CreateGoal(ctx context.Context, userID string, input CreateGoalInput) (domain.Goal, error) {
 	const query = `
 		INSERT INTO goals (user_id, topic, desired_result, recommended_minutes, tags)

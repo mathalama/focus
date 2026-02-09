@@ -13,7 +13,7 @@ func NewRouter(handler *handlers.Handler, corsOrigin string, jwtSecret string) *
 	router.Use(gin.Logger(), gin.Recovery())
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{corsOrigin},
-		AllowMethods:     []string{"GET", "POST", "PATCH", "OPTIONS"},
+		AllowMethods:     []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Content-Type", "Authorization"},
 		AllowCredentials: true,
 	}))
@@ -27,6 +27,8 @@ func NewRouter(handler *handlers.Handler, corsOrigin string, jwtSecret string) *
 	{
 		api.GET("/me", handler.GetMe)
 		api.POST("/auth/telegram/link-code", handler.CreateTelegramLinkCode)
+		api.GET("/integrations/telegram", handler.GetTelegramIdentity)
+		api.DELETE("/integrations/telegram", handler.UnlinkTelegram)
 
 		api.POST("/goals", handler.CreateGoal)
 		api.GET("/goals", handler.ListGoals)
