@@ -2,9 +2,75 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  color-scheme: dark;
+  --color-background: 9 9 11;
+  --color-surface: 24 24 27;
+  --color-surface-highlight: 39 39 42;
+  --color-primary: 250 250 250;
+  --color-primary-foreground: 9 9 11;
+  --color-secondary: 39 39 42;
+  --color-secondary-foreground: 250 250 250;
+  --color-accent: 255 255 255;
+  --color-accent-foreground: 0 0 0;
+  --color-muted: 113 113 122;
+  --color-muted-foreground: 161 161 170;
+  --color-border: 39 39 42;
+}
+
+:root[data-theme='ivory'] {
+  color-scheme: light;
+  --color-background: 247 245 239;
+  --color-surface: 255 254 250;
+  --color-surface-highlight: 242 237 226;
+  --color-primary: 34 35 42;
+  --color-primary-foreground: 255 255 255;
+  --color-secondary: 239 234 223;
+  --color-secondary-foreground: 34 35 42;
+  --color-accent: 42 123 92;
+  --color-accent-foreground: 255 255 255;
+  --color-muted: 151 145 132;
+  --color-muted-foreground: 112 106 94;
+  --color-border: 226 219 205;
+}
+
+:root[data-theme='forest'] {
+  color-scheme: dark;
+  --color-background: 14 25 20;
+  --color-surface: 23 37 31;
+  --color-surface-highlight: 35 55 47;
+  --color-primary: 231 244 236;
+  --color-primary-foreground: 14 25 20;
+  --color-secondary: 32 53 44;
+  --color-secondary-foreground: 231 244 236;
+  --color-accent: 133 214 166;
+  --color-accent-foreground: 9 20 14;
+  --color-muted: 105 146 124;
+  --color-muted-foreground: 148 189 167;
+  --color-border: 38 62 51;
+}
+
+:root[data-theme='ocean'] {
+  color-scheme: dark;
+  --color-background: 8 18 31;
+  --color-surface: 14 29 47;
+  --color-surface-highlight: 20 41 66;
+  --color-primary: 233 244 255;
+  --color-primary-foreground: 8 18 31;
+  --color-secondary: 24 49 77;
+  --color-secondary-foreground: 233 244 255;
+  --color-accent: 125 206 255;
+  --color-accent-foreground: 8 26 45;
+  --color-muted: 110 149 185;
+  --color-muted-foreground: 153 188 221;
+  --color-border: 28 55 86;
+}
+
 body {
   margin: 0;
   min-width: 320px;
+  background: rgb(var(--color-background));
+  color: rgb(var(--color-primary));
 }
 
 * {

@@ -8,26 +8,26 @@ export default {
         mono: ['JetBrains Mono', 'monospace'], // Adding a mono font for a tech/math vibe
       },
       colors: {
-        background: '#09090b', // Zinc 950 - Deep Black
-        surface: '#18181b',    // Zinc 900 - Dark Surface
-        surfaceHighlight: '#27272a', // Zinc 800
+        background: 'rgb(var(--color-background) / <alpha-value>)',
+        surface: 'rgb(var(--color-surface) / <alpha-value>)',
+        surfaceHighlight: 'rgb(var(--color-surface-highlight) / <alpha-value>)',
         primary: {
-          DEFAULT: '#fafafa', // Zinc 50 - White Text
-          foreground: '#09090b',
+          DEFAULT: 'rgb(var(--color-primary) / <alpha-value>)',
+          foreground: 'rgb(var(--color-primary-foreground) / <alpha-value>)',
         },
         secondary: {
-          DEFAULT: '#27272a', // Zinc 800
-          foreground: '#fafafa',
+          DEFAULT: 'rgb(var(--color-secondary) / <alpha-value>)',
+          foreground: 'rgb(var(--color-secondary-foreground) / <alpha-value>)',
         },
         accent: {
-          DEFAULT: '#ffffff', // White accent for high contrast minimalist look
-          foreground: '#000000',
+          DEFAULT: 'rgb(var(--color-accent) / <alpha-value>)',
+          foreground: 'rgb(var(--color-accent-foreground) / <alpha-value>)',
         },
         muted: {
-          DEFAULT: '#71717a', // Zinc 500
-          foreground: '#a1a1aa', // Zinc 400
+          DEFAULT: 'rgb(var(--color-muted) / <alpha-value>)',
+          foreground: 'rgb(var(--color-muted-foreground) / <alpha-value>)',
         },
-        border: '#27272a', // Zinc 800
+        border: 'rgb(var(--color-border) / <alpha-value>)',
       },
       borderRadius: {
         'xl': '0.75rem', // Slightly sharper corners for a tech look

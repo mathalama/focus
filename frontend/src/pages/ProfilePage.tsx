@@ -1,8 +1,9 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { AppLanguage, useLanguage } from '../context/LanguageContext';
+import { AppTheme, useTheme } from '../context/ThemeContext';
 import { Card } from '../components/ui/Card';
-import { Globe, UserRound } from 'lucide-react';
+import { Globe, Palette, UserRound } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 
 const languageOptions: Array<{ value: AppLanguage; label: string }> = [
@@ -14,7 +15,14 @@ const languageOptions: Array<{ value: AppLanguage; label: string }> = [
 export const ProfilePage: React.FC = () => {
   const { user } = useAuth();
   const { language, setLanguage } = useLanguage();
+  const { theme, setTheme } = useTheme();
   const { t } = useI18n();
+  const themeOptions: Array<{ value: AppTheme; label: string }> = [
+    { value: 'midnight', label: t('profile.theme.option.midnight') },
+    { value: 'ivory', label: t('profile.theme.option.ivory') },
+    { value: 'forest', label: t('profile.theme.option.forest') },
+    { value: 'ocean', label: t('profile.theme.option.ocean') },
+  ];
 
   return (
     <div className="space-y-8 font-sans">
@@ -63,6 +71,29 @@ export const ProfilePage: React.FC = () => {
 
         <p className="mt-3 text-xs text-muted-foreground">
           {t('profile.rollout')}
+        </p>
+
+        <div className="mt-6 mb-4 flex items-center gap-2">
+          <Palette size={16} className="text-accent" />
+          <h2 className="font-mono text-sm font-bold uppercase tracking-wide text-primary">{t('profile.theme')}</h2>
+        </div>
+
+        <label className="mb-2 block text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
+          {t('profile.interfaceTheme')}
+        </label>
+        <select
+          value={theme}
+          onChange={(e) => setTheme(e.target.value as AppTheme)}
+          className="h-11 w-full rounded-xl border-2 border-border bg-background px-4 text-sm text-primary outline-none transition-all focus:border-primary/20"
+        >
+          {themeOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <p className="mt-3 text-xs text-muted-foreground">
+          {t('profile.themeRollout')}
         </p>
       </Card>
     </div>
