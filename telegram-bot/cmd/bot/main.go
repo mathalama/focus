@@ -91,8 +91,14 @@ type backendLinkedUser struct {
 }
 
 type backendTelegramStatusResponse struct {
-	Linked bool               `json:"linked"`
-	User   *backendLinkedUser `json:"user"`
+	Linked               bool               `json:"linked"`
+	NotificationsEnabled bool               `json:"notifications_enabled"`
+	User                 *backendLinkedUser `json:"user"`
+}
+
+type backendTelegramNotificationsRequest struct {
+	TelegramUserID int64 `json:"telegram_user_id"`
+	Enabled        bool  `json:"enabled"`
 }
 
 func main() {
@@ -297,6 +303,12 @@ func (a *app) handleMessage(ctx context.Context, msg telegramMessage) {
 		a.sendLinkStatus(ctx, msg)
 	case "/help":
 		a.sendMessage(ctx, msg.Chat.ID, a.helpText())
+	case "/notify", "/notifications":
+		a.handleNotifyCommand(ctx, msg, arg)
+	case "/subscribe":
+		a.setNotifications(ctx, msg, true)
+	case "/unsubscribe":
+		a.setNotifications(ctx, msg, false)
 	case "/link":
 		if arg == "" {
 			a.sendMessage(ctx, msg.Chat.ID, "Использование: /link <CODE>")
@@ -338,18 +350,33 @@ func parseStartCode(arg string) string {
 
 func (a *app) helpText() string {
 	return strings.Join([]string{
-		"Доступные команды:",
-		"/start — проверить, привязан ли Telegram",
-		"/status — показать текущий статус привязки",
+		"Команды бота:",
+		"/start или /status — показать статус привязки",
 		"/link <CODE> — привязать аккаунт по коду из приложения",
+		"/notify on — включить уведомления",
+		"/notify off — выключить уведомления",
+		"/subscribe — включить уведомления",
+		"/unsubscribe — выключить уведомления",
+		"/help — показать команды",
 	}, "\n")
+}
+
+func parseNotifyArg(arg string) (bool, bool) {
+	switch strings.ToLower(strings.TrimSpace(arg)) {
+	case "on", "true", "1", "enable", "enabled":
+		return true, true
+	case "off", "false", "0", "disable", "disabled":
+		return false, true
+	default:
+		return false, false
+	}
 }
 
 func (a *app) sendLinkStatus(ctx context.Context, msg telegramMessage) {
 	status, statusCode, backendErr := a.getTelegramStatus(ctx, msg.From.ID)
 	if statusCode == http.StatusOK {
 		if status.Linked {
-			a.sendMessage(ctx, msg.Chat.ID, a.alreadyLinkedText(status.User))
+			a.sendMessage(ctx, msg.Chat.ID, a.alreadyLinkedText(status.User, status.NotificationsEnabled))
 			return
 		}
 		a.sendMessage(ctx, msg.Chat.ID, a.notLinkedText())
@@ -364,6 +391,62 @@ func (a *app) sendLinkStatus(ctx context.Context, msg telegramMessage) {
 
 	log.Printf("telegram status check failed (status=%d): %s", statusCode, backendErr)
 	a.sendMessage(ctx, msg.Chat.ID, "Не удалось проверить статус привязки. Попробуй позже.")
+}
+
+func (a *app) handleNotifyCommand(ctx context.Context, msg telegramMessage, arg string) {
+	enabled, ok := parseNotifyArg(arg)
+	if !ok {
+		a.sendMessage(ctx, msg.Chat.ID, "Использование: /notify on или /notify off")
+		return
+	}
+	a.setNotifications(ctx, msg, enabled)
+}
+
+func (a *app) setNotifications(ctx context.Context, msg telegramMessage, enabled bool) {
+	status, statusCode, backendErr := a.getTelegramStatus(ctx, msg.From.ID)
+	if statusCode == http.StatusOK && !status.Linked {
+		a.sendMessage(ctx, msg.Chat.ID, a.notLinkedText())
+		return
+	}
+	if statusCode == http.StatusOK && status.Linked && status.NotificationsEnabled == enabled {
+		if enabled {
+			a.sendMessage(ctx, msg.Chat.ID, "Уведомления уже включены.\nЧтобы выключить: /notify off")
+		} else {
+			a.sendMessage(ctx, msg.Chat.ID, "Уведомления уже выключены.\nЧтобы включить: /notify on")
+		}
+		return
+	}
+	if statusCode != http.StatusOK {
+		log.Printf("telegram status check before notify update failed (status=%d): %s", statusCode, backendErr)
+		a.sendMessage(ctx, msg.Chat.ID, "Не удалось проверить статус привязки. Попробуй позже.")
+		return
+	}
+
+	updateStatusCode, updateErr := a.setTelegramNotifications(ctx, msg.From.ID, enabled)
+	switch updateStatusCode {
+	case http.StatusOK:
+		updatedStatus, updatedStatusCode, updatedStatusErr := a.getTelegramStatus(ctx, msg.From.ID)
+		if updatedStatusCode == http.StatusOK && updatedStatus.Linked {
+			a.sendMessage(ctx, msg.Chat.ID, a.alreadyLinkedText(updatedStatus.User, updatedStatus.NotificationsEnabled))
+			return
+		}
+		if updatedStatusCode != http.StatusOK {
+			log.Printf("telegram status check after notify update failed (status=%d): %s", updatedStatusCode, updatedStatusErr)
+		}
+		if enabled {
+			a.sendMessage(ctx, msg.Chat.ID, "Уведомления включены.")
+		} else {
+			a.sendMessage(ctx, msg.Chat.ID, "Уведомления выключены.")
+		}
+	case http.StatusNotFound:
+		a.sendMessage(ctx, msg.Chat.ID, a.notLinkedText())
+	case http.StatusUnauthorized, http.StatusServiceUnavailable:
+		log.Printf("telegram notify update rejected (status=%d): %s", updateStatusCode, updateErr)
+		a.sendMessage(ctx, msg.Chat.ID, "Интеграция Telegram временно недоступна. Попробуй позже.")
+	default:
+		log.Printf("telegram notify update failed (status=%d): %s", updateStatusCode, updateErr)
+		a.sendMessage(ctx, msg.Chat.ID, "Не удалось обновить настройки уведомлений. Попробуй позже.")
+	}
 }
 
 func (a *app) notLinkedText() string {
@@ -384,14 +467,23 @@ func (a *app) notLinkedText() string {
 		lines = append(lines, "3) Отправь сюда: /link <CODE>")
 	}
 
-	lines = append(lines, "", "Пример: /link ABCD2345")
+	lines = append(lines, "", "Пример: /link ABCD2345", "После привязки уведомления по умолчанию выключены.")
 	return strings.Join(lines, "\n")
 }
 
-func (a *app) alreadyLinkedText(user *backendLinkedUser) string {
+func (a *app) alreadyLinkedText(user *backendLinkedUser, notificationsEnabled bool) string {
+	notificationState := "выключены"
+	nextNotificationAction := "Чтобы включить: /notify on"
+	if notificationsEnabled {
+		notificationState = "включены"
+		nextNotificationAction = "Чтобы выключить: /notify off"
+	}
+
 	if user == nil {
 		return strings.Join([]string{
 			"Telegram уже привязан к аккаунту.",
+			fmt.Sprintf("Уведомления: %s.", notificationState),
+			nextNotificationAction,
 			"Если нужно перепривязать — сначала отвяжи Telegram в профиле приложения.",
 		}, "\n")
 	}
@@ -407,6 +499,8 @@ func (a *app) alreadyLinkedText(user *backendLinkedUser) string {
 	return strings.Join([]string{
 		"Telegram уже привязан.",
 		fmt.Sprintf("Аккаунт: %s", userLabel),
+		fmt.Sprintf("Уведомления: %s.", notificationState),
+		nextNotificationAction,
 		"Если нужно перепривязать — сначала отвяжи Telegram в профиле приложения, потом отправь новый /link код.",
 	}, "\n")
 }
@@ -420,7 +514,7 @@ func (a *app) tryLink(ctx context.Context, msg telegramMessage, rawCode string) 
 
 	status, statusCode, backendErr := a.getTelegramStatus(ctx, msg.From.ID)
 	if statusCode == http.StatusOK && status.Linked {
-		a.sendMessage(ctx, msg.Chat.ID, a.alreadyLinkedText(status.User))
+		a.sendMessage(ctx, msg.Chat.ID, a.alreadyLinkedText(status.User, status.NotificationsEnabled))
 		return
 	}
 	if statusCode != http.StatusOK && statusCode != http.StatusNotFound && statusCode != http.StatusBadRequest {
@@ -440,7 +534,7 @@ func (a *app) tryLink(ctx context.Context, msg telegramMessage, rawCode string) 
 	case http.StatusOK:
 		linkedStatus, linkedStatusCode, linkedErr := a.getTelegramStatus(ctx, msg.From.ID)
 		if linkedStatusCode == http.StatusOK && linkedStatus.Linked {
-			a.sendMessage(ctx, msg.Chat.ID, "Готово. "+a.alreadyLinkedText(linkedStatus.User))
+			a.sendMessage(ctx, msg.Chat.ID, "Готово.\n"+a.alreadyLinkedText(linkedStatus.User, linkedStatus.NotificationsEnabled))
 			return
 		}
 		if linkedStatusCode != http.StatusOK {
@@ -490,6 +584,45 @@ func (a *app) getTelegramStatus(ctx context.Context, telegramUserID int64) (back
 	}
 
 	return backendTelegramStatusResponse{}, resp.StatusCode, strings.TrimSpace(string(raw))
+}
+
+func (a *app) setTelegramNotifications(ctx context.Context, telegramUserID int64, enabled bool) (int, string) {
+	body, err := json.Marshal(backendTelegramNotificationsRequest{
+		TelegramUserID: telegramUserID,
+		Enabled:        enabled,
+	})
+	if err != nil {
+		return 0, err.Error()
+	}
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPatch,
+		a.cfg.backendURL+"/api/v1/integrations/telegram/notifications",
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return 0, err.Error()
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Telegram-Bot-Auth", a.cfg.botAuth)
+
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return 0, err.Error()
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return resp.StatusCode, ""
+	}
+
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	var parsed backendErrorResponse
+	if err := json.Unmarshal(raw, &parsed); err == nil && parsed.Error != "" {
+		return resp.StatusCode, parsed.Error
+	}
+	return resp.StatusCode, strings.TrimSpace(string(raw))
 }
 
 func (a *app) linkTelegram(ctx context.Context, payload backendTelegramLinkRequest) (int, string) {

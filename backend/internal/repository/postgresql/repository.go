@@ -191,13 +191,14 @@ func (r *Repository) LinkTelegramByCode(ctx context.Context, input TelegramLinkI
 	}
 
 	const upsertIdentityQuery = `
-		INSERT INTO telegram_identities (user_id, telegram_user_id, telegram_username, telegram_first_name, telegram_last_name)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO telegram_identities (user_id, telegram_user_id, telegram_username, telegram_first_name, telegram_last_name, notifications_enabled)
+		VALUES ($1, $2, $3, $4, $5, FALSE)
 		ON CONFLICT (user_id) DO UPDATE SET
 			telegram_user_id = EXCLUDED.telegram_user_id,
 			telegram_username = EXCLUDED.telegram_username,
 			telegram_first_name = EXCLUDED.telegram_first_name,
 			telegram_last_name = EXCLUDED.telegram_last_name,
+			notifications_enabled = FALSE,
 			linked_at = NOW()
 	`
 
@@ -243,7 +244,7 @@ func (r *Repository) LinkTelegramByCode(ctx context.Context, input TelegramLinkI
 
 func (r *Repository) GetTelegramIdentity(ctx context.Context, userID string) (domain.TelegramIdentity, error) {
 	const query = `
-		SELECT telegram_user_id, telegram_username, telegram_first_name, telegram_last_name, linked_at
+		SELECT telegram_user_id, telegram_username, telegram_first_name, telegram_last_name, notifications_enabled, linked_at
 		FROM telegram_identities
 		WHERE user_id = $1
 	`
@@ -254,6 +255,7 @@ func (r *Repository) GetTelegramIdentity(ctx context.Context, userID string) (do
 		&identity.TelegramUsername,
 		&identity.TelegramFirst,
 		&identity.TelegramLast,
+		&identity.NotificationsOn,
 		&identity.LinkedAt,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -265,15 +267,16 @@ func (r *Repository) GetTelegramIdentity(ctx context.Context, userID string) (do
 	return identity, nil
 }
 
-func (r *Repository) GetUserByTelegramUserID(ctx context.Context, telegramUserID int64) (domain.User, error) {
+func (r *Repository) GetUserByTelegramUserID(ctx context.Context, telegramUserID int64) (domain.User, bool, error) {
 	const query = `
-		SELECT u.id, u.email, u.name, u.nectar_balance, u.total_nectar_earned, u.created_at
+		SELECT u.id, u.email, u.name, u.nectar_balance, u.total_nectar_earned, u.created_at, ti.notifications_enabled
 		FROM telegram_identities ti
 		JOIN users u ON u.id = ti.user_id
 		WHERE ti.telegram_user_id = $1
 	`
 
 	var user domain.User
+	var notificationsEnabled bool
 	if err := r.pool.QueryRow(ctx, query, telegramUserID).Scan(
 		&user.ID,
 		&user.Email,
@@ -281,14 +284,31 @@ func (r *Repository) GetUserByTelegramUserID(ctx context.Context, telegramUserID
 		&user.NectarBalance,
 		&user.TotalNectarEarned,
 		&user.CreatedAt,
+		&notificationsEnabled,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return domain.User{}, ErrNotFound
+			return domain.User{}, false, ErrNotFound
 		}
-		return domain.User{}, fmt.Errorf("get user by telegram user id: %w", err)
+		return domain.User{}, false, fmt.Errorf("get user by telegram user id: %w", err)
 	}
 
-	return user, nil
+	return user, notificationsEnabled, nil
+}
+
+func (r *Repository) SetTelegramNotificationsByTelegramUserID(ctx context.Context, telegramUserID int64, enabled bool) error {
+	result, err := r.pool.Exec(
+		ctx,
+		`UPDATE telegram_identities SET notifications_enabled = $2 WHERE telegram_user_id = $1`,
+		telegramUserID,
+		enabled,
+	)
+	if err != nil {
+		return fmt.Errorf("set telegram notifications: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (r *Repository) UnlinkTelegram(ctx context.Context, userID string) error {

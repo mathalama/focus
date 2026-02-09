@@ -16,6 +16,7 @@ type TelegramIdentity struct {
 	TelegramUsername string    `json:"telegram_username"`
 	TelegramFirst    string    `json:"telegram_first_name"`
 	TelegramLast     string    `json:"telegram_last_name"`
+	NotificationsOn  bool      `json:"notifications_enabled"`
 	LinkedAt         time.Time `json:"linked_at"`
 }
 

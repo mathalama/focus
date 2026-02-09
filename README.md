@@ -92,6 +92,7 @@ Frontend default: `http://localhost:5173`
 - `POST /api/v1/auth/telegram/link-code` (Bearer)
 - `POST /api/v1/integrations/telegram/link` (`X-Telegram-Bot-Auth`)
 - `GET /api/v1/integrations/telegram/status` (`X-Telegram-Bot-Auth`, `telegram_user_id` query)
+- `PATCH /api/v1/integrations/telegram/notifications` (`X-Telegram-Bot-Auth`)
 - `GET /api/v1/integrations/telegram` (Bearer)
 - `DELETE /api/v1/integrations/telegram` (Bearer)
 - `POST /api/v1/goals`

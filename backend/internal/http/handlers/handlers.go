@@ -25,7 +25,8 @@ type Repository interface {
 	CreateTelegramLinkCode(ctx context.Context, userID string, ttl time.Duration) (string, time.Time, error)
 	LinkTelegramByCode(ctx context.Context, input postgresql.TelegramLinkInput) (domain.User, error)
 	GetTelegramIdentity(ctx context.Context, userID string) (domain.TelegramIdentity, error)
-	GetUserByTelegramUserID(ctx context.Context, telegramUserID int64) (domain.User, error)
+	GetUserByTelegramUserID(ctx context.Context, telegramUserID int64) (domain.User, bool, error)
+	SetTelegramNotificationsByTelegramUserID(ctx context.Context, telegramUserID int64, enabled bool) error
 	UnlinkTelegram(ctx context.Context, userID string) error
 	CreateGoal(ctx context.Context, userID string, input postgresql.CreateGoalInput) (domain.Goal, error)
 	ListGoals(ctx context.Context, userID string) ([]domain.Goal, error)
@@ -189,9 +190,12 @@ func (h *Handler) TelegramStatusByUserID(c *gin.Context) {
 		return
 	}
 
-	user, err := h.repo.GetUserByTelegramUserID(c.Request.Context(), telegramUserID)
+	user, notificationsEnabled, err := h.repo.GetUserByTelegramUserID(c.Request.Context(), telegramUserID)
 	if errors.Is(err, postgresql.ErrNotFound) {
-		c.JSON(http.StatusOK, gin.H{"linked": false})
+		c.JSON(http.StatusOK, gin.H{
+			"linked":                false,
+			"notifications_enabled": false,
+		})
 		return
 	}
 	if err != nil {
@@ -200,12 +204,56 @@ func (h *Handler) TelegramStatusByUserID(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"linked": true,
+		"linked":                true,
+		"notifications_enabled": notificationsEnabled,
 		"user": gin.H{
 			"id":    user.ID,
 			"name":  user.Name,
 			"email": user.Email,
 		},
+	})
+}
+
+type telegramNotificationsRequest struct {
+	TelegramUserID int64 `json:"telegram_user_id"`
+	Enabled        bool  `json:"enabled"`
+}
+
+func (h *Handler) TelegramSetNotificationsByUserID(c *gin.Context) {
+	if h.telegramBotAuthToken == "" {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "telegram integration is not configured"})
+		return
+	}
+
+	botAuthToken := strings.TrimSpace(c.GetHeader(telegramBotAuthHeader))
+	if subtle.ConstantTimeCompare([]byte(botAuthToken), []byte(h.telegramBotAuthToken)) != 1 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid bot auth token"})
+		return
+	}
+
+	var req telegramNotificationsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+	if req.TelegramUserID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "telegram_user_id must be a positive integer"})
+		return
+	}
+
+	err := h.repo.SetTelegramNotificationsByTelegramUserID(c.Request.Context(), req.TelegramUserID, req.Enabled)
+	if errors.Is(err, postgresql.ErrNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "telegram account is not linked"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update telegram notifications"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"updated":               true,
+		"notifications_enabled": req.Enabled,
 	})
 }
 

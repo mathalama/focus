@@ -41,10 +41,14 @@ curl -X POST http://localhost:8080/api/v1/auth/telegram/link-code \
 
 - `POST /api/v1/integrations/telegram/link` with header `X-Telegram-Bot-Auth`.
 - `GET /api/v1/integrations/telegram/status?telegram_user_id=<id>` with header `X-Telegram-Bot-Auth` to check if Telegram is already linked.
+- `PATCH /api/v1/integrations/telegram/notifications` with header `X-Telegram-Bot-Auth` to enable/disable notifications.
 
 ## Commands
 
-- `/start` - check link status and show onboarding steps
-- `/status` - show current link status
+- `/start` or `/status` - check link status and show onboarding steps
 - `/link <CODE>` - link Telegram using one-time code from app profile
+- `/notify on` / `/notify off` - enable or disable notifications
+- `/subscribe` / `/unsubscribe` - quick enable/disable notifications
 - `/help` - list commands
+
+By default, notifications are **disabled** right after linking.

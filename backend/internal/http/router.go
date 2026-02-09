@@ -22,6 +22,7 @@ func NewRouter(handler *handlers.Handler, corsOrigin string, jwtSecret string) *
 	router.POST("/api/v1/auth/dev-login", handler.DevLogin)
 	router.POST("/api/v1/integrations/telegram/link", handler.TelegramLinkByCode)
 	router.GET("/api/v1/integrations/telegram/status", handler.TelegramStatusByUserID)
+	router.PATCH("/api/v1/integrations/telegram/notifications", handler.TelegramSetNotificationsByUserID)
 
 	api := router.Group("/api/v1")
 	api.Use(middleware.RequireUserID(jwtSecret))
