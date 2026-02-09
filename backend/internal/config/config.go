@@ -14,6 +14,7 @@ type Config struct {
 	DatabaseURL                string
 	CorsOrigin                 string
 	JWTSecret                  string
+	EnableDevLogin             bool
 	MaxSessionPauses           int
 	TelegramBotAuthToken       string
 	TelegramLinkCodeTTLMinutes int
@@ -33,6 +34,7 @@ func Load() (Config, error) {
 		DatabaseURL:                os.Getenv("DATABASE_URL"),
 		CorsOrigin:                 envOrDefault("CORS_ORIGIN", "http://localhost:5173"),
 		JWTSecret:                  envOrDefault("JWT_SECRET", "dev-secret-change-me"),
+		EnableDevLogin:             boolOrDefault("ENABLE_DEV_LOGIN", true),
 		MaxSessionPauses:           intOrDefault("MAX_SESSION_PAUSES", 3),
 		TelegramBotAuthToken:       envOrDefault("TELEGRAM_BOT_AUTH_TOKEN", "dev-telegram-bot-auth-change-me"),
 		TelegramLinkCodeTTLMinutes: intOrDefault("TELEGRAM_LINK_CODE_TTL_MINUTES", 10),
@@ -77,4 +79,16 @@ func intOrDefault(key string, fallback int) int {
 	}
 
 	return parsed
+}
+
+func boolOrDefault(key string, fallback bool) bool {
+	value := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	switch value {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return fallback
+	}
 }

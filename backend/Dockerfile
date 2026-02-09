@@ -8,6 +8,7 @@ RUN go mod download
 
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/backend ./cmd/api
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/migrate ./cmd/migrate
 
 FROM alpine:3.21
 RUN apk add --no-cache ca-certificates \
@@ -16,6 +17,8 @@ RUN apk add --no-cache ca-certificates \
 
 WORKDIR /app
 COPY --from=builder /out/backend /app/backend
+COPY --from=builder /out/migrate /app/migrate
+COPY --from=builder /src/migrations /app/migrations
 
 USER app
 EXPOSE 8080

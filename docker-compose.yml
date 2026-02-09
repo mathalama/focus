@@ -10,26 +10,44 @@ services:
       - "5433:5432"
     volumes:
       - focus_pg_data:/var/lib/postgresql/data
-      - ./backend/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U mathalama -d mathalama"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  backend:
+  migrate:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: mathalama-focus-backend
+    image: mathalama-focus-backend:local
+    container_name: mathalama-focus-migrate
     depends_on:
       postgres:
         condition: service_healthy
     env_file:
       - ./backend/.env
     environment:
+      DATABASE_URL: postgres://mathalama:mathalama@postgres:5432/mathalama?sslmode=disable
+      MIGRATIONS_DIR: /app/migrations
+    command: ["/app/migrate"]
+    restart: "no"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: mathalama-focus-backend:local
+    container_name: mathalama-focus-backend
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - ./backend/.env
+    environment:
       PORT: "8080"
       DATABASE_URL: postgres://mathalama:mathalama@postgres:5432/mathalama?sslmode=disable
+      ENABLE_DEV_LOGIN: "false"
     ports:
       - "8080:8080"
     restart: unless-stopped

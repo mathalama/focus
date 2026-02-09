@@ -6,7 +6,7 @@ import (
 )
 
 // NewRouter builds the Gin engine with all routes wired.
-func NewRouter(handler *Handler, corsOrigin string, validateToken func(string) (string, error)) *gin.Engine {
+func NewRouter(handler *Handler, corsOrigin string, enableDevLogin bool, validateToken func(string) (string, error)) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Logger(), gin.Recovery())
 	router.Use(cors.New(cors.Config{
@@ -18,7 +18,9 @@ func NewRouter(handler *Handler, corsOrigin string, validateToken func(string) (
 
 	// Public routes
 	router.GET("/health", handler.Health)
-	router.POST("/api/v1/auth/dev-login", handler.DevLogin)
+	if enableDevLogin {
+		router.POST("/api/v1/auth/dev-login", handler.DevLogin)
+	}
 	router.POST("/api/v1/auth/register", handler.Register)
 	router.POST("/api/v1/auth/login", handler.Login)
 	router.POST("/api/v1/auth/verify-email/resend", handler.ResendVerificationEmail)

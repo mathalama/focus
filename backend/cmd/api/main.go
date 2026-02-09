@@ -57,7 +57,7 @@ func main() {
 
 	// Delivery
 	handler := httpapi.NewHandler(authUC, sessionUC, goalUC, analyticsUC, shopUC, telegramUC, cfg.TelegramBotAuthToken)
-	router := httpapi.NewRouter(handler, cfg.CorsOrigin, jwtSvc.ValidateToken)
+	router := httpapi.NewRouter(handler, cfg.CorsOrigin, cfg.EnableDevLogin, jwtSvc.ValidateToken)
 
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%s", cfg.Port),
