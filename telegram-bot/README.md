@@ -21,6 +21,7 @@ Optional:
 - `BACKEND_URL` (default `http://localhost:8080`)
 - `APP_URL` (default `http://localhost:5173`)
 - `TELEGRAM_POLL_TIMEOUT_SECONDS` (default `30`)
+- `BOT_INTERNAL_API_ADDR` (default `:8091`)
 
 ## Auth Link Flow
 
@@ -58,3 +59,31 @@ The bot also shows inline buttons in each response:
 - `Выключить`
 - `Статус`
 - `Помощь`
+
+## Internal Notify API
+
+Bot exposes an internal API for programmatic notifications.
+
+- `GET /health`
+- `POST /internal/notify`
+  - Header: `X-Telegram-Bot-Auth: <TELEGRAM_BOT_AUTH_TOKEN>`
+  - Body:
+    - `telegram_user_id` (required)
+    - `message` (required)
+    - `disable_buttons` (optional, default `false`)
+    - `force` (optional, default `false`)
+
+When `force=false`, bot checks backend link status and `notifications_enabled` first.
+
+Example:
+
+```bash
+curl -X POST http://localhost:8091/internal/notify \
+  -H "Content-Type: application/json" \
+  -H "X-Telegram-Bot-Auth: <TOKEN>" \
+  -d '{
+    "telegram_user_id": 123456789,
+    "message": "Через 5 минут начнется фокус-сессия",
+    "disable_buttons": true
+  }'
+```

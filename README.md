@@ -83,7 +83,6 @@ Frontend default: `http://localhost:5173`
 ### Frontend (`frontend/.env`)
 
 - `VITE_API_BASE_URL=http://localhost:8080`
-- `VITE_TELEGRAM_BOT_URL=https://t.me/<your_bot_username>`
 
 ## API (MVP)
 

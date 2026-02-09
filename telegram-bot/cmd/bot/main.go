@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +24,8 @@ const (
 	defaultBackendURL = "http://localhost:8080"
 	defaultAppURL     = "http://localhost:5173"
 	defaultPollWait   = 30 * time.Second
+	defaultAPIAddr    = ":8091"
+	botAuthHeaderName = "X-Telegram-Bot-Auth"
 
 	callbackNotifyOn  = "notify_on"
 	callbackNotifyOff = "notify_off"
@@ -31,11 +34,12 @@ const (
 )
 
 type config struct {
-	token       string
-	backendURL  string
-	appURL      string
-	botAuth     string
-	pollTimeout time.Duration
+	token           string
+	backendURL      string
+	appURL          string
+	botAuth         string
+	pollTimeout     time.Duration
+	internalAPIAddr string
 }
 
 type app struct {
@@ -129,6 +133,13 @@ type backendTelegramNotificationsRequest struct {
 	Enabled        bool  `json:"enabled"`
 }
 
+type internalNotifyRequest struct {
+	TelegramUserID int64  `json:"telegram_user_id"`
+	Message        string `json:"message"`
+	DisableButtons bool   `json:"disable_buttons"`
+	Force          bool   `json:"force"`
+}
+
 func main() {
 	if err := loadDotEnvIfPresent(".env"); err != nil {
 		log.Fatalf("config error: failed to load .env: %v", err)
@@ -158,11 +169,12 @@ func main() {
 
 func loadConfig() (config, error) {
 	cfg := config{
-		token:       strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN")),
-		backendURL:  strings.TrimRight(strings.TrimSpace(envOrDefault("BACKEND_URL", defaultBackendURL)), "/"),
-		appURL:      strings.TrimRight(strings.TrimSpace(envOrDefault("APP_URL", defaultAppURL)), "/"),
-		botAuth:     strings.TrimSpace(os.Getenv("TELEGRAM_BOT_AUTH_TOKEN")),
-		pollTimeout: parseDurationSeconds(os.Getenv("TELEGRAM_POLL_TIMEOUT_SECONDS"), defaultPollWait),
+		token:           strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN")),
+		backendURL:      strings.TrimRight(strings.TrimSpace(envOrDefault("BACKEND_URL", defaultBackendURL)), "/"),
+		appURL:          strings.TrimRight(strings.TrimSpace(envOrDefault("APP_URL", defaultAppURL)), "/"),
+		botAuth:         strings.TrimSpace(os.Getenv("TELEGRAM_BOT_AUTH_TOKEN")),
+		pollTimeout:     parseDurationSeconds(os.Getenv("TELEGRAM_POLL_TIMEOUT_SECONDS"), defaultPollWait),
+		internalAPIAddr: strings.TrimSpace(envOrDefault("BOT_INTERNAL_API_ADDR", defaultAPIAddr)),
 	}
 
 	if cfg.token == "" {
@@ -247,6 +259,31 @@ func parseDurationSeconds(raw string, fallback time.Duration) time.Duration {
 }
 
 func (a *app) run(ctx context.Context) error {
+	errCh := make(chan error, 2)
+
+	go func() {
+		errCh <- a.runPolling(ctx)
+	}()
+
+	go func() {
+		errCh <- a.runInternalAPIServer(ctx)
+	}()
+
+	var firstErr error
+	for i := 0; i < cap(errCh); i++ {
+		err := <-errCh
+		if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, http.ErrServerClosed) {
+			continue
+		}
+		if firstErr == nil {
+			firstErr = err
+		}
+	}
+
+	return firstErr
+}
+
+func (a *app) runPolling(ctx context.Context) error {
 	offset := 0
 	for {
 		select {
@@ -281,6 +318,114 @@ func (a *app) run(ctx context.Context) error {
 			a.handleMessage(ctx, *update.Message)
 		}
 	}
+}
+
+func (a *app) runInternalAPIServer(ctx context.Context) error {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", a.handleInternalHealth)
+	mux.HandleFunc("/internal/notify", a.handleInternalNotify)
+
+	srv := &http.Server{
+		Addr:              a.cfg.internalAPIAddr,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("internal api shutdown error: %v", err)
+		}
+	}()
+
+	log.Printf("telegram internal api listening on %s", a.cfg.internalAPIAddr)
+	err := srv.ListenAndServe()
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
+}
+
+func (a *app) handleInternalHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
+func (a *app) handleInternalNotify(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	if subtle.ConstantTimeCompare([]byte(strings.TrimSpace(r.Header.Get(botAuthHeaderName))), []byte(a.cfg.botAuth)) != 1 {
+		writeJSONError(w, http.StatusUnauthorized, "invalid bot auth token")
+		return
+	}
+
+	var req internalNotifyRequest
+	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	req.Message = strings.TrimSpace(req.Message)
+	if req.TelegramUserID <= 0 || req.Message == "" {
+		writeJSONError(w, http.StatusBadRequest, "telegram_user_id and message are required")
+		return
+	}
+
+	if !req.Force {
+		status, statusCode, statusErr := a.getTelegramStatus(r.Context(), req.TelegramUserID)
+		if statusCode != http.StatusOK {
+			log.Printf("internal notify status check failed (status=%d): %s", statusCode, statusErr)
+			writeJSONError(w, http.StatusBadGateway, "failed to resolve telegram link status")
+			return
+		}
+		if !status.Linked {
+			writeJSONError(w, http.StatusNotFound, "telegram account is not linked")
+			return
+		}
+		if !status.NotificationsEnabled {
+			writeJSONError(w, http.StatusConflict, "telegram notifications are disabled")
+			return
+		}
+	}
+
+	replyMarkup := a.actionKeyboard()
+	if req.DisableButtons {
+		replyMarkup = nil
+	}
+
+	if err := a.sendMessageWithMarkupResult(r.Context(), req.TelegramUserID, req.Message, replyMarkup); err != nil {
+		log.Printf("internal notify send failed: %v", err)
+		writeJSONError(w, http.StatusBadGateway, "failed to send telegram message")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"sent":                 true,
+		"telegram_user_id":     req.TelegramUserID,
+		"notifications_forced": req.Force,
+	})
+}
+
+func writeJSON(w http.ResponseWriter, statusCode int, payload any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		log.Printf("write json response failed: %v", err)
+	}
+}
+
+func writeJSONError(w http.ResponseWriter, statusCode int, message string) {
+	writeJSON(w, statusCode, map[string]any{"error": strings.TrimSpace(message)})
 }
 
 func (a *app) getUpdates(ctx context.Context, offset int) ([]telegramUpdate, error) {
@@ -754,14 +899,19 @@ func (a *app) sendMessage(ctx context.Context, chatID int64, text string) {
 }
 
 func (a *app) sendMessageWithMarkup(ctx context.Context, chatID int64, text string, markup *inlineKeyboardMarkup) {
+	if err := a.sendMessageWithMarkupResult(ctx, chatID, text, markup); err != nil {
+		log.Printf("sendMessage failed: %v", err)
+	}
+}
+
+func (a *app) sendMessageWithMarkupResult(ctx context.Context, chatID int64, text string, markup *inlineKeyboardMarkup) error {
 	payload, err := json.Marshal(sendMessageRequest{
 		ChatID:      chatID,
 		Text:        text,
 		ReplyMarkup: markup,
 	})
 	if err != nil {
-		log.Printf("marshal sendMessage payload: %v", err)
-		return
+		return fmt.Errorf("marshal sendMessage payload: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(
@@ -771,22 +921,22 @@ func (a *app) sendMessageWithMarkup(ctx context.Context, chatID int64, text stri
 		bytes.NewReader(payload),
 	)
 	if err != nil {
-		log.Printf("build sendMessage request: %v", err)
-		return
+		return fmt.Errorf("build sendMessage request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := a.client.Do(req)
 	if err != nil {
-		log.Printf("sendMessage request failed: %v", err)
-		return
+		return fmt.Errorf("sendMessage request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		log.Printf("sendMessage failed (status=%d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return fmt.Errorf("telegram sendMessage failed (status=%d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
+
+	return nil
 }
 
 func (a *app) answerCallbackQuery(ctx context.Context, queryID, text string) {
