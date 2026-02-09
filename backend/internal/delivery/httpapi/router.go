@@ -19,6 +19,7 @@ func NewRouter(handler *Handler, corsOrigin string, enableDevLogin bool, validat
 	// Public routes
 	router.GET("/health", handler.Health)
 	router.GET("/health/db", handler.DBHealth)
+	router.HEAD("/health/db", handler.DBHealth)
 	if enableDevLogin {
 		router.POST("/api/v1/auth/dev-login", handler.DevLogin)
 	}
