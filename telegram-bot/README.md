@@ -52,3 +52,9 @@ curl -X POST http://localhost:8080/api/v1/auth/telegram/link-code \
 - `/help` - list commands
 
 By default, notifications are **disabled** right after linking.
+
+The bot also shows inline buttons in each response:
+- `Включить`
+- `Выключить`
+- `Статус`
+- `Помощь`

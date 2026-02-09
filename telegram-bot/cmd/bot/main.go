@@ -23,6 +23,11 @@ const (
 	defaultBackendURL = "http://localhost:8080"
 	defaultAppURL     = "http://localhost:5173"
 	defaultPollWait   = 30 * time.Second
+
+	callbackNotifyOn  = "notify_on"
+	callbackNotifyOff = "notify_off"
+	callbackStatus    = "show_status"
+	callbackHelp      = "show_help"
 )
 
 type config struct {
@@ -46,8 +51,9 @@ type telegramAPIResponse[T any] struct {
 }
 
 type telegramUpdate struct {
-	UpdateID int              `json:"update_id"`
-	Message  *telegramMessage `json:"message"`
+	UpdateID      int                    `json:"update_id"`
+	Message       *telegramMessage       `json:"message"`
+	CallbackQuery *telegramCallbackQuery `json:"callback_query"`
 }
 
 type telegramMessage struct {
@@ -60,6 +66,13 @@ type telegramChat struct {
 	ID int64 `json:"id"`
 }
 
+type telegramCallbackQuery struct {
+	ID      string           `json:"id"`
+	From    telegramUser     `json:"from"`
+	Message *telegramMessage `json:"message"`
+	Data    string           `json:"data"`
+}
+
 type telegramUser struct {
 	ID        int64  `json:"id"`
 	Username  string `json:"username"`
@@ -68,8 +81,23 @@ type telegramUser struct {
 }
 
 type sendMessageRequest struct {
-	ChatID int64  `json:"chat_id"`
-	Text   string `json:"text"`
+	ChatID      int64                 `json:"chat_id"`
+	Text        string                `json:"text"`
+	ReplyMarkup *inlineKeyboardMarkup `json:"reply_markup,omitempty"`
+}
+
+type inlineKeyboardButton struct {
+	Text         string `json:"text"`
+	CallbackData string `json:"callback_data,omitempty"`
+}
+
+type inlineKeyboardMarkup struct {
+	InlineKeyboard [][]inlineKeyboardButton `json:"inline_keyboard"`
+}
+
+type answerCallbackQueryRequest struct {
+	CallbackQueryID string `json:"callback_query_id"`
+	Text            string `json:"text,omitempty"`
 }
 
 type backendErrorResponse struct {
@@ -242,6 +270,10 @@ func (a *app) run(ctx context.Context) error {
 			if update.UpdateID >= offset {
 				offset = update.UpdateID + 1
 			}
+			if update.CallbackQuery != nil {
+				a.handleCallbackQuery(ctx, *update.CallbackQuery)
+				continue
+			}
 			if update.Message == nil || strings.TrimSpace(update.Message.Text) == "" {
 				continue
 			}
@@ -320,6 +352,54 @@ func (a *app) handleMessage(ctx context.Context, msg telegramMessage) {
 	}
 }
 
+func (a *app) actionKeyboard() *inlineKeyboardMarkup {
+	return &inlineKeyboardMarkup{
+		InlineKeyboard: [][]inlineKeyboardButton{
+			{
+				{Text: "Включить", CallbackData: callbackNotifyOn},
+				{Text: "Выключить", CallbackData: callbackNotifyOff},
+			},
+			{
+				{Text: "Статус", CallbackData: callbackStatus},
+				{Text: "Помощь", CallbackData: callbackHelp},
+			},
+		},
+	}
+}
+
+func (a *app) handleCallbackQuery(ctx context.Context, query telegramCallbackQuery) {
+	if query.ID == "" {
+		return
+	}
+
+	chatID := int64(0)
+	if query.Message != nil {
+		chatID = query.Message.Chat.ID
+	}
+	if chatID <= 0 {
+		a.answerCallbackQuery(ctx, query.ID, "Чат недоступен")
+		return
+	}
+
+	action := strings.TrimSpace(query.Data)
+	switch action {
+	case callbackNotifyOn:
+		a.setNotificationsByUser(ctx, query.From, chatID, true)
+		a.answerCallbackQuery(ctx, query.ID, "Уведомления: ON")
+	case callbackNotifyOff:
+		a.setNotificationsByUser(ctx, query.From, chatID, false)
+		a.answerCallbackQuery(ctx, query.ID, "Уведомления: OFF")
+	case callbackStatus:
+		a.sendLinkStatusByUser(ctx, query.From, chatID)
+		a.answerCallbackQuery(ctx, query.ID, "Статус обновлен")
+	case callbackHelp:
+		a.sendMessage(ctx, chatID, a.helpText())
+		a.answerCallbackQuery(ctx, query.ID, "Открываю помощь")
+	default:
+		a.answerCallbackQuery(ctx, query.ID, "Неизвестная кнопка")
+	}
+}
+
 func parseCommand(text string) (string, string) {
 	parts := strings.Fields(text)
 	if len(parts) == 0 {
@@ -373,24 +453,28 @@ func parseNotifyArg(arg string) (bool, bool) {
 }
 
 func (a *app) sendLinkStatus(ctx context.Context, msg telegramMessage) {
-	status, statusCode, backendErr := a.getTelegramStatus(ctx, msg.From.ID)
+	a.sendLinkStatusByUser(ctx, msg.From, msg.Chat.ID)
+}
+
+func (a *app) sendLinkStatusByUser(ctx context.Context, from telegramUser, chatID int64) {
+	status, statusCode, backendErr := a.getTelegramStatus(ctx, from.ID)
 	if statusCode == http.StatusOK {
 		if status.Linked {
-			a.sendMessage(ctx, msg.Chat.ID, a.alreadyLinkedText(status.User, status.NotificationsEnabled))
+			a.sendMessage(ctx, chatID, a.alreadyLinkedText(status.User, status.NotificationsEnabled))
 			return
 		}
-		a.sendMessage(ctx, msg.Chat.ID, a.notLinkedText())
+		a.sendMessage(ctx, chatID, a.notLinkedText())
 		return
 	}
 
 	if statusCode == http.StatusUnauthorized || statusCode == http.StatusServiceUnavailable {
 		log.Printf("telegram status check rejected (status=%d): %s", statusCode, backendErr)
-		a.sendMessage(ctx, msg.Chat.ID, "Интеграция Telegram временно недоступна. Попробуй позже.")
+		a.sendMessage(ctx, chatID, "Интеграция Telegram временно недоступна. Попробуй позже.")
 		return
 	}
 
 	log.Printf("telegram status check failed (status=%d): %s", statusCode, backendErr)
-	a.sendMessage(ctx, msg.Chat.ID, "Не удалось проверить статус привязки. Попробуй позже.")
+	a.sendMessage(ctx, chatID, "Не удалось проверить статус привязки. Попробуй позже.")
 }
 
 func (a *app) handleNotifyCommand(ctx context.Context, msg telegramMessage, arg string) {
@@ -403,49 +487,53 @@ func (a *app) handleNotifyCommand(ctx context.Context, msg telegramMessage, arg 
 }
 
 func (a *app) setNotifications(ctx context.Context, msg telegramMessage, enabled bool) {
-	status, statusCode, backendErr := a.getTelegramStatus(ctx, msg.From.ID)
+	a.setNotificationsByUser(ctx, msg.From, msg.Chat.ID, enabled)
+}
+
+func (a *app) setNotificationsByUser(ctx context.Context, from telegramUser, chatID int64, enabled bool) {
+	status, statusCode, backendErr := a.getTelegramStatus(ctx, from.ID)
 	if statusCode == http.StatusOK && !status.Linked {
-		a.sendMessage(ctx, msg.Chat.ID, a.notLinkedText())
+		a.sendMessage(ctx, chatID, a.notLinkedText())
 		return
 	}
 	if statusCode == http.StatusOK && status.Linked && status.NotificationsEnabled == enabled {
 		if enabled {
-			a.sendMessage(ctx, msg.Chat.ID, "Уведомления уже включены.\nЧтобы выключить: /notify off")
+			a.sendMessage(ctx, chatID, "Уведомления уже включены.\nЧтобы выключить: /notify off")
 		} else {
-			a.sendMessage(ctx, msg.Chat.ID, "Уведомления уже выключены.\nЧтобы включить: /notify on")
+			a.sendMessage(ctx, chatID, "Уведомления уже выключены.\nЧтобы включить: /notify on")
 		}
 		return
 	}
 	if statusCode != http.StatusOK {
 		log.Printf("telegram status check before notify update failed (status=%d): %s", statusCode, backendErr)
-		a.sendMessage(ctx, msg.Chat.ID, "Не удалось проверить статус привязки. Попробуй позже.")
+		a.sendMessage(ctx, chatID, "Не удалось проверить статус привязки. Попробуй позже.")
 		return
 	}
 
-	updateStatusCode, updateErr := a.setTelegramNotifications(ctx, msg.From.ID, enabled)
+	updateStatusCode, updateErr := a.setTelegramNotifications(ctx, from.ID, enabled)
 	switch updateStatusCode {
 	case http.StatusOK:
-		updatedStatus, updatedStatusCode, updatedStatusErr := a.getTelegramStatus(ctx, msg.From.ID)
+		updatedStatus, updatedStatusCode, updatedStatusErr := a.getTelegramStatus(ctx, from.ID)
 		if updatedStatusCode == http.StatusOK && updatedStatus.Linked {
-			a.sendMessage(ctx, msg.Chat.ID, a.alreadyLinkedText(updatedStatus.User, updatedStatus.NotificationsEnabled))
+			a.sendMessage(ctx, chatID, a.alreadyLinkedText(updatedStatus.User, updatedStatus.NotificationsEnabled))
 			return
 		}
 		if updatedStatusCode != http.StatusOK {
 			log.Printf("telegram status check after notify update failed (status=%d): %s", updatedStatusCode, updatedStatusErr)
 		}
 		if enabled {
-			a.sendMessage(ctx, msg.Chat.ID, "Уведомления включены.")
+			a.sendMessage(ctx, chatID, "Уведомления включены.")
 		} else {
-			a.sendMessage(ctx, msg.Chat.ID, "Уведомления выключены.")
+			a.sendMessage(ctx, chatID, "Уведомления выключены.")
 		}
 	case http.StatusNotFound:
-		a.sendMessage(ctx, msg.Chat.ID, a.notLinkedText())
+		a.sendMessage(ctx, chatID, a.notLinkedText())
 	case http.StatusUnauthorized, http.StatusServiceUnavailable:
 		log.Printf("telegram notify update rejected (status=%d): %s", updateStatusCode, updateErr)
-		a.sendMessage(ctx, msg.Chat.ID, "Интеграция Telegram временно недоступна. Попробуй позже.")
+		a.sendMessage(ctx, chatID, "Интеграция Telegram временно недоступна. Попробуй позже.")
 	default:
 		log.Printf("telegram notify update failed (status=%d): %s", updateStatusCode, updateErr)
-		a.sendMessage(ctx, msg.Chat.ID, "Не удалось обновить настройки уведомлений. Попробуй позже.")
+		a.sendMessage(ctx, chatID, "Не удалось обновить настройки уведомлений. Попробуй позже.")
 	}
 }
 
@@ -662,9 +750,14 @@ func (a *app) linkTelegram(ctx context.Context, payload backendTelegramLinkReque
 }
 
 func (a *app) sendMessage(ctx context.Context, chatID int64, text string) {
+	a.sendMessageWithMarkup(ctx, chatID, text, a.actionKeyboard())
+}
+
+func (a *app) sendMessageWithMarkup(ctx context.Context, chatID int64, text string, markup *inlineKeyboardMarkup) {
 	payload, err := json.Marshal(sendMessageRequest{
-		ChatID: chatID,
-		Text:   text,
+		ChatID:      chatID,
+		Text:        text,
+		ReplyMarkup: markup,
 	})
 	if err != nil {
 		log.Printf("marshal sendMessage payload: %v", err)
@@ -693,5 +786,44 @@ func (a *app) sendMessage(ctx context.Context, chatID int64, text string) {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		log.Printf("sendMessage failed (status=%d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+}
+
+func (a *app) answerCallbackQuery(ctx context.Context, queryID, text string) {
+	if strings.TrimSpace(queryID) == "" {
+		return
+	}
+
+	payload, err := json.Marshal(answerCallbackQueryRequest{
+		CallbackQueryID: queryID,
+		Text:            strings.TrimSpace(text),
+	})
+	if err != nil {
+		log.Printf("marshal answerCallbackQuery payload: %v", err)
+		return
+	}
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		a.apiURL+"/answerCallbackQuery",
+		bytes.NewReader(payload),
+	)
+	if err != nil {
+		log.Printf("build answerCallbackQuery request: %v", err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := a.client.Do(req)
+	if err != nil {
+		log.Printf("answerCallbackQuery request failed: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		log.Printf("answerCallbackQuery failed (status=%d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 }
