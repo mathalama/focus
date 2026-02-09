@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { AppLanguage, useLanguage } from '../context/LanguageContext';
 import { Card } from '../components/ui/Card';
-import { Bell, Copy, Globe, LoaderCircle, UserRound } from 'lucide-react';
+import { Bell, Copy, ExternalLink, Globe, LoaderCircle, UserRound } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { api } from '../lib/api';
 import { Button } from '../components/ui/Button';
@@ -21,6 +21,9 @@ export const ProfilePage: React.FC = () => {
   const [telegramNotice, setTelegramNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [isCopyingCode, setIsCopyingCode] = useState(false);
+  const telegramBotUrl = (import.meta.env.VITE_TELEGRAM_BOT_URL ?? '').trim();
+  const telegramBotHandleMatch = telegramBotUrl.match(/(?:t\.me\/|telegram\.me\/)([A-Za-z0-9_]+)/i);
+  const telegramBotLabel = telegramBotHandleMatch ? `@${telegramBotHandleMatch[1]}` : telegramBotUrl;
 
   const telegramExpiresLabel = useMemo(() => {
     if (!telegramCode?.expiresAt) return '';
@@ -129,6 +132,27 @@ export const ProfilePage: React.FC = () => {
           <Bell size={14} className="mt-[1px] text-accent" />
           <p>{t('profile.telegram.notificationsHint')}</p>
         </div>
+
+        {telegramBotUrl ? (
+          <a
+            href={telegramBotUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mb-5 flex items-center justify-between rounded-xl border border-[#229ED9]/30 bg-[#229ED9]/10 px-4 py-3 transition-colors hover:bg-[#229ED9]/15"
+          >
+            <span className="text-xs font-mono text-primary">
+              {t('profile.telegram.botLinkLabel')}
+            </span>
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#229ED9]">
+              {t('profile.telegram.botLinkOpen', { bot: telegramBotLabel })}
+              <ExternalLink size={13} />
+            </span>
+          </a>
+        ) : (
+          <p className="mb-5 text-xs text-muted-foreground">
+            {t('profile.telegram.botLinkMissing')}
+          </p>
+        )}
 
         <div className="flex flex-wrap gap-3">
           <Button
