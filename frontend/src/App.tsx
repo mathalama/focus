@@ -14,6 +14,7 @@ import { HivePage } from './pages/HivePage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { HistoryPage } from './pages/HistoryPage';
+import { AdminPage } from './pages/AdminPage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, authChecked } = useAuth();
@@ -28,6 +29,14 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
+  return <>{children}</>;
+};
+
+const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, isAuthenticated, authChecked } = useAuth();
+  if (!authChecked) return null;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (user?.role !== 'admin') return <Navigate to="/" replace />;
   return <>{children}</>;
 };
 
@@ -52,6 +61,7 @@ function App() {
                 <Route path="analytics" element={<ErrorBoundary><AnalyticsPage /></ErrorBoundary>} />
                 <Route path="history" element={<HistoryPage />} />
                 <Route path="profile" element={<ProfilePage />} />
+                <Route path="admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
                 <Route path="session/:sessionId" element={<SessionPage />} />
                 <Route path="session/:sessionId/reflection" element={<ReflectionPage />} />
               </Route>

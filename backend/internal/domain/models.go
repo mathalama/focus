@@ -2,13 +2,51 @@ package domain
 
 import "time"
 
+const (
+	RoleUser  = "user"
+	RoleAdmin = "admin"
+)
+
 type User struct {
 	ID                string    `json:"id"`
 	Email             string    `json:"email"`
 	Name              string    `json:"name"`
+	Role              string    `json:"role"`
 	NectarBalance     int       `json:"nectar_balance"`
 	TotalNectarEarned int       `json:"total_nectar_earned"`
 	CreatedAt         time.Time `json:"created_at"`
+}
+
+type AuthSession struct {
+	ID         string     `json:"id"`
+	UserID     string     `json:"user_id"`
+	UserAgent  string     `json:"user_agent"`
+	IPAddress  string     `json:"ip_address"`
+	ExpiresAt  time.Time  `json:"expires_at"`
+	RevokedAt  *time.Time `json:"revoked_at,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
+	LastUsedAt time.Time  `json:"last_used_at"`
+}
+
+type EmailDelivery struct {
+	ID            string     `json:"id"`
+	ToEmail       string     `json:"to_email"`
+	Status        string     `json:"status"`
+	Attempts      int        `json:"attempts"`
+	LastError     string     `json:"last_error,omitempty"`
+	NextAttemptAt *time.Time `json:"next_attempt_at,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+	SentAt        *time.Time `json:"sent_at,omitempty"`
+}
+
+type ProductEvent struct {
+	ID         string         `json:"id"`
+	UserID     *string        `json:"user_id,omitempty"`
+	EventName  string         `json:"event_name"`
+	Source     string         `json:"source"`
+	Properties map[string]any `json:"properties"`
+	CreatedAt  time.Time      `json:"created_at"`
 }
 
 type TelegramIdentity struct {

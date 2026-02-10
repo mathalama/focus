@@ -17,6 +17,11 @@ type UserRepository interface {
 	GetAuthUserByEmail(ctx context.Context, email string) (domain.AuthUser, error)
 	CreateEmailVerificationToken(ctx context.Context, userID string, ttl time.Duration) (string, time.Time, error)
 	VerifyEmailByToken(ctx context.Context, rawToken string) (domain.User, error)
+	CreateRefreshSession(ctx context.Context, userID, tokenHash, userAgent, ipAddress string, ttl time.Duration) (domain.AuthSession, error)
+	RotateRefreshSession(ctx context.Context, currentTokenHash, newTokenHash, userAgent, ipAddress string, ttl time.Duration) (domain.AuthSession, error)
+	RevokeRefreshSessionByTokenHash(ctx context.Context, tokenHash string) error
+	RevokeAllRefreshSessions(ctx context.Context, userID string) error
+	ListActiveRefreshSessions(ctx context.Context, userID string) ([]domain.AuthSession, error)
 }
 
 // GoalRepository handles goal persistence.

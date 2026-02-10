@@ -33,18 +33,28 @@ func main() {
 	}
 	defer pool.Close()
 
-	repo := postgres.NewRepository(pool, cfg.MaxSessionPauses)
+	repo := postgres.NewRepository(pool, cfg.MaxSessionPauses, cfg.MaxActiveAuthSessions, cfg.AuthSessionBindClient)
 	jwtSvc := jwt.NewService(cfg.JWTSecret)
 
 	var emailSvc usecase.EmailService
+	var emailOutbox *email.OutboxService
 	if cfg.ResendAPIKey != "" && cfg.ResendFromEmail != "" {
-		emailSvc = email.NewResendService(cfg.ResendAPIKey, cfg.ResendFromEmail, cfg.EmailVerificationTTLMin)
+		resendSvc := email.NewResendService(cfg.ResendAPIKey, cfg.ResendFromEmail, cfg.EmailVerificationTTLMin)
+		emailOutbox = email.NewOutboxService(
+			pool,
+			resendSvc,
+			time.Duration(cfg.EmailOutboxPollSeconds)*time.Second,
+			cfg.EmailOutboxMaxAttempts,
+		)
+		emailOutbox.Start(ctx)
+		emailSvc = emailOutbox
 	}
 
 	// Use cases
 	authUC := usecase.NewAuthUseCase(
 		repo, jwtSvc, emailSvc,
 		time.Duration(cfg.EmailVerificationTTLMin)*time.Minute,
+		time.Duration(cfg.RefreshSessionTTLHours)*time.Hour,
 		cfg.EmailVerifyURLBase,
 		cfg.EmailVerifySuccessRedirect,
 		cfg.EmailVerifyFailRedirect,
@@ -56,7 +66,7 @@ func main() {
 	telegramUC := usecase.NewTelegramUseCase(repo, time.Duration(cfg.TelegramLinkCodeTTLMinutes)*time.Minute)
 
 	// Delivery
-	handler := httpapi.NewHandler(authUC, sessionUC, goalUC, analyticsUC, shopUC, telegramUC, repo, cfg.TelegramBotAuthToken)
+	handler := httpapi.NewHandler(authUC, sessionUC, goalUC, analyticsUC, shopUC, telegramUC, repo, emailOutbox, repo, cfg.TelegramBotAuthToken)
 	router := httpapi.NewRouter(handler, cfg.CorsOrigin, cfg.EnableDevLogin, jwtSvc.ValidateToken)
 
 	srv := &http.Server{

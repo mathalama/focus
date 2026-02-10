@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -68,6 +69,7 @@ func (c *Client) LinkTelegram(ctx context.Context, payload TelegramLinkRequest) 
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(config.BotAuthHeader, c.botAuth)
+	req.Header.Set("Idempotency-Key", "tg-link-"+strconv.FormatInt(payload.TelegramUserID, 10)+"-"+strconv.FormatInt(time.Now().UnixNano(), 10))
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

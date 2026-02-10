@@ -54,3 +54,8 @@ type ResendOutput struct {
 	AlreadyVerified bool
 	ExpiresAt       time.Time
 }
+
+type AuthTokens struct {
+	AccessToken  string
+	RefreshToken string
+}

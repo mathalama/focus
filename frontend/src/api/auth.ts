@@ -22,6 +22,16 @@ export const authAPI = {
     return res.json();
   },
 
+  refresh: async (refreshToken: string): Promise<AuthResponse> => {
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!res.ok) throw new Error(await readAPIError(res, 'Session refresh failed'));
+    return res.json();
+  },
+
   resendVerification: async (email: string) => {
     const res = await fetch(`${API_BASE_URL}/api/v1/auth/verify-email/resend`, {
       method: 'POST',
@@ -39,6 +49,33 @@ export const authAPI = {
       body: JSON.stringify({ email, name }),
     });
     if (!res.ok) throw new Error(await readAPIError(res, 'Login failed'));
+    return res.json();
+  },
+
+  logout: async (refreshToken: string) => {
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!res.ok) throw new Error(await readAPIError(res, 'Logout failed'));
+    return res.json();
+  },
+
+  logoutAll: async () => {
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/logout-all`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error(await readAPIError(res, 'Logout all failed'));
+    return res.json();
+  },
+
+  listSessions: async () => {
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/sessions`, {
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error(await readAPIError(res, 'Failed to list sessions'));
     return res.json();
   },
 

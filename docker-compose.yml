@@ -30,7 +30,7 @@ services:
     environment:
       DATABASE_URL: postgres://mathalama:mathalama@postgres:5432/mathalama?sslmode=disable
       MIGRATIONS_DIR: /app/migrations
-    command: ["/app/migrate"]
+    entrypoint: ["/app/migrate"]
     restart: "no"
 
   backend:

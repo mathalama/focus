@@ -51,6 +51,11 @@ func (h *Handler) CreateGoal(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"goal": goal})
+	h.trackEvent(c.Request.Context(), userID, "goal.created", map[string]any{
+		"goal_id":             goal.ID,
+		"recommended_minutes": goal.RecommendedMinutes,
+		"tags_count":          len(goal.Tags),
+	})
 }
 
 func (h *Handler) ListGoals(c *gin.Context) {

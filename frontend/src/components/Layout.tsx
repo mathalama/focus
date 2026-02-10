@@ -1,7 +1,7 @@
 import React from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, BarChart3, LogOut, Trophy, Activity, UserRound, Languages, History } from 'lucide-react';
+import { LayoutDashboard, BarChart3, LogOut, Trophy, Activity, UserRound, Languages, History, Shield } from 'lucide-react';
 import { cn } from '../lib/cn';
 import { useLanguage } from '../context/LanguageContext';
 import { useI18n } from '../lib/i18n';
@@ -20,6 +20,9 @@ export const Layout: React.FC = () => {
     { path: '/history', label: t('layout.nav.history'), icon: History },
     { path: '/profile', label: t('layout.nav.profile'), icon: UserRound },
   ];
+  if (user?.role === 'admin') {
+    navItems.push({ path: '/admin', label: 'Admin', icon: Shield });
+  }
 
   const handleLogout = () => {
     logout();

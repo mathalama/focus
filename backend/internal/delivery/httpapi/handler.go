@@ -14,6 +14,15 @@ import (
 	"github.com/google/uuid"
 )
 
+type EmailDeliveryReader interface {
+	ListRecentDeliveries(ctx context.Context, limit int) ([]domain.EmailDelivery, error)
+}
+
+type EventTracker interface {
+	TrackEvent(ctx context.Context, userID, eventName, source string, properties map[string]any) error
+	ListRecentEvents(ctx context.Context, limit int, eventName string) ([]domain.ProductEvent, error)
+}
+
 type DBKeepAlive interface {
 	KeepAlive(ctx context.Context) error
 }
@@ -27,6 +36,8 @@ type Handler struct {
 	shop                 *usecase.ShopUseCase
 	telegram             *usecase.TelegramUseCase
 	dbKeepAlive          DBKeepAlive
+	emailDeliveries      EmailDeliveryReader
+	eventTracker         EventTracker
 	telegramBotAuthToken string
 }
 
@@ -39,6 +50,8 @@ func NewHandler(
 	shop *usecase.ShopUseCase,
 	telegram *usecase.TelegramUseCase,
 	dbKeepAlive DBKeepAlive,
+	emailDeliveries EmailDeliveryReader,
+	eventTracker EventTracker,
 	telegramBotAuthToken string,
 ) *Handler {
 	return &Handler{
@@ -49,6 +62,8 @@ func NewHandler(
 		shop:                 shop,
 		telegram:             telegram,
 		dbKeepAlive:          dbKeepAlive,
+		emailDeliveries:      emailDeliveries,
+		eventTracker:         eventTracker,
 		telegramBotAuthToken: strings.TrimSpace(telegramBotAuthToken),
 	}
 }
@@ -115,4 +130,13 @@ func (h *Handler) sessionAction(c *gin.Context, action func(userID, sessionID st
 	}
 
 	c.JSON(http.StatusOK, gin.H{"session": payload})
+}
+
+func (h *Handler) trackEvent(ctx context.Context, userID, eventName string, properties map[string]any) {
+	if h.eventTracker == nil {
+		return
+	}
+	if err := h.eventTracker.TrackEvent(ctx, userID, eventName, "api", properties); err != nil {
+		// best effort analytics
+	}
 }

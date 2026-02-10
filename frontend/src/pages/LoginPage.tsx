@@ -48,8 +48,8 @@ export const LoginPage: React.FC = () => {
         return;
       }
 
-      const { user, token } = await api.auth.login(email, password);
-      login(user, token);
+      const { user, token, refresh_token } = await api.auth.login(email, password);
+      login(user, token, refresh_token);
       navigate('/');
     } catch (err) {
       console.error('Login failed', err);

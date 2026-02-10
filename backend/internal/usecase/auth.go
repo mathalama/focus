@@ -2,6 +2,9 @@ package usecase
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
@@ -21,6 +24,7 @@ type AuthUseCase struct {
 	tokenSvc   TokenService
 	emailSvc   EmailService
 	verifyTTL  time.Duration
+	refreshTTL time.Duration
 	verifyURL  string
 	successURL string
 	failureURL string
@@ -31,16 +35,21 @@ func NewAuthUseCase(
 	tokenSvc TokenService,
 	emailSvc EmailService,
 	verifyTTL time.Duration,
+	refreshTTL time.Duration,
 	verifyURL, successURL, failureURL string,
 ) *AuthUseCase {
 	if verifyTTL <= 0 {
 		verifyTTL = 60 * time.Minute
+	}
+	if refreshTTL <= 0 {
+		refreshTTL = 30 * 24 * time.Hour
 	}
 	return &AuthUseCase{
 		userRepo:   userRepo,
 		tokenSvc:   tokenSvc,
 		emailSvc:   emailSvc,
 		verifyTTL:  verifyTTL,
+		refreshTTL: refreshTTL,
 		verifyURL:  strings.TrimRight(strings.TrimSpace(verifyURL), "/"),
 		successURL: strings.TrimSpace(successURL),
 		failureURL: strings.TrimSpace(failureURL),
@@ -63,12 +72,12 @@ func (uc *AuthUseCase) GetUser(ctx context.Context, userID string) (domain.User,
 }
 
 // DevLogin performs a development-only upsert login (no password).
-func (uc *AuthUseCase) DevLogin(ctx context.Context, email, name string) (domain.User, string, error) {
+func (uc *AuthUseCase) DevLogin(ctx context.Context, email, name, userAgent, ipAddress string) (domain.User, AuthTokens, error) {
 	email = strings.TrimSpace(email)
 	name = strings.TrimSpace(name)
 
 	if email == "" {
-		return domain.User{}, "", domain.ErrInvalidEmail
+		return domain.User{}, AuthTokens{}, domain.ErrInvalidEmail
 	}
 	if name == "" {
 		name = "Focus Learner"
@@ -76,15 +85,15 @@ func (uc *AuthUseCase) DevLogin(ctx context.Context, email, name string) (domain
 
 	user, err := uc.userRepo.DevLogin(ctx, email, name)
 	if err != nil {
-		return domain.User{}, "", err
+		return domain.User{}, AuthTokens{}, err
 	}
 
-	token, err := uc.tokenSvc.GenerateToken(user.ID)
+	tokens, err := uc.issueAuthTokens(ctx, user, userAgent, ipAddress)
 	if err != nil {
-		return domain.User{}, "", fmt.Errorf("generate token: %w", err)
+		return domain.User{}, AuthTokens{}, err
 	}
 
-	return user, token, nil
+	return user, tokens, nil
 }
 
 // Register creates a new user with email/password, sends verification email.
@@ -144,35 +153,92 @@ func (uc *AuthUseCase) Register(ctx context.Context, rawEmail, name, password st
 }
 
 // Login authenticates a user by email and password.
-func (uc *AuthUseCase) Login(ctx context.Context, rawEmail, password string) (domain.User, string, error) {
+func (uc *AuthUseCase) Login(ctx context.Context, rawEmail, password, userAgent, ipAddress string) (domain.User, AuthTokens, error) {
 	email, err := normalizeEmail(rawEmail)
 	if err != nil {
-		return domain.User{}, "", domain.ErrInvalidEmail
+		return domain.User{}, AuthTokens{}, domain.ErrInvalidEmail
 	}
 
 	authUser, err := uc.userRepo.GetAuthUserByEmail(ctx, email)
 	if errors.Is(err, domain.ErrNotFound) {
-		return domain.User{}, "", domain.ErrInvalidCredentials
+		return domain.User{}, AuthTokens{}, domain.ErrInvalidCredentials
 	}
 	if err != nil {
-		return domain.User{}, "", err
+		return domain.User{}, AuthTokens{}, err
 	}
 
 	if strings.TrimSpace(authUser.PasswordHash) == "" ||
 		bcrypt.CompareHashAndPassword([]byte(authUser.PasswordHash), []byte(password)) != nil {
-		return domain.User{}, "", domain.ErrInvalidCredentials
+		return domain.User{}, AuthTokens{}, domain.ErrInvalidCredentials
 	}
 
 	if authUser.EmailVerifiedAt == nil {
-		return domain.User{}, "", domain.ErrEmailNotVerified
+		return domain.User{}, AuthTokens{}, domain.ErrEmailNotVerified
 	}
 
-	token, err := uc.tokenSvc.GenerateToken(authUser.User.ID)
+	tokens, err := uc.issueAuthTokens(ctx, authUser.User, userAgent, ipAddress)
 	if err != nil {
-		return domain.User{}, "", fmt.Errorf("generate token: %w", err)
+		return domain.User{}, AuthTokens{}, err
 	}
 
-	return authUser.User, token, nil
+	return authUser.User, tokens, nil
+}
+
+// Refresh rotates the refresh token and issues a fresh access token.
+func (uc *AuthUseCase) Refresh(ctx context.Context, rawRefreshToken, userAgent, ipAddress string) (domain.User, AuthTokens, error) {
+	rawRefreshToken = strings.TrimSpace(rawRefreshToken)
+	if rawRefreshToken == "" {
+		return domain.User{}, AuthTokens{}, domain.ErrRefreshTokenInvalid
+	}
+
+	oldTokenHash := hashToken(rawRefreshToken)
+	newRawRefreshToken, err := generateRawToken(32)
+	if err != nil {
+		return domain.User{}, AuthTokens{}, fmt.Errorf("generate refresh token: %w", err)
+	}
+	newTokenHash := hashToken(newRawRefreshToken)
+
+	session, err := uc.userRepo.RotateRefreshSession(ctx, oldTokenHash, newTokenHash, userAgent, ipAddress, uc.refreshTTL)
+	if err != nil {
+		if errors.Is(err, domain.ErrRefreshTokenInvalid) {
+			return domain.User{}, AuthTokens{}, domain.ErrRefreshTokenInvalid
+		}
+		return domain.User{}, AuthTokens{}, fmt.Errorf("rotate refresh session: %w", err)
+	}
+
+	user, err := uc.userRepo.GetUser(ctx, session.UserID)
+	if err != nil {
+		return domain.User{}, AuthTokens{}, fmt.Errorf("load user for refresh session: %w", err)
+	}
+
+	accessToken, err := uc.tokenSvc.GenerateToken(user.ID)
+	if err != nil {
+		return domain.User{}, AuthTokens{}, fmt.Errorf("generate access token: %w", err)
+	}
+
+	return user, AuthTokens{
+		AccessToken:  accessToken,
+		RefreshToken: newRawRefreshToken,
+	}, nil
+}
+
+// Logout revokes a single refresh session represented by the provided refresh token.
+func (uc *AuthUseCase) Logout(ctx context.Context, rawRefreshToken string) error {
+	rawRefreshToken = strings.TrimSpace(rawRefreshToken)
+	if rawRefreshToken == "" {
+		return domain.ErrRefreshTokenInvalid
+	}
+	return uc.userRepo.RevokeRefreshSessionByTokenHash(ctx, hashToken(rawRefreshToken))
+}
+
+// LogoutAll revokes all active refresh sessions for the given user.
+func (uc *AuthUseCase) LogoutAll(ctx context.Context, userID string) error {
+	return uc.userRepo.RevokeAllRefreshSessions(ctx, userID)
+}
+
+// ListAuthSessions returns active refresh sessions for the current user.
+func (uc *AuthUseCase) ListAuthSessions(ctx context.Context, userID string) ([]domain.AuthSession, error) {
+	return uc.userRepo.ListActiveRefreshSessions(ctx, userID)
 }
 
 // ResendVerification re-sends the verification email.
@@ -225,6 +291,27 @@ func (uc *AuthUseCase) VerifyEmail(ctx context.Context, rawToken string) (domain
 	return uc.userRepo.VerifyEmailByToken(ctx, rawToken)
 }
 
+func (uc *AuthUseCase) issueAuthTokens(ctx context.Context, user domain.User, userAgent, ipAddress string) (AuthTokens, error) {
+	accessToken, err := uc.tokenSvc.GenerateToken(user.ID)
+	if err != nil {
+		return AuthTokens{}, fmt.Errorf("generate access token: %w", err)
+	}
+
+	refreshToken, err := generateRawToken(32)
+	if err != nil {
+		return AuthTokens{}, fmt.Errorf("generate refresh token: %w", err)
+	}
+
+	if _, err := uc.userRepo.CreateRefreshSession(ctx, user.ID, hashToken(refreshToken), userAgent, ipAddress, uc.refreshTTL); err != nil {
+		return AuthTokens{}, fmt.Errorf("create refresh session: %w", err)
+	}
+
+	return AuthTokens{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	}, nil
+}
+
 // ---------- helpers ----------
 
 func (uc *AuthUseCase) buildVerifyLink(token string) (string, error) {
@@ -256,4 +343,20 @@ func normalizeEmail(raw string) (string, error) {
 		return "", err
 	}
 	return email, nil
+}
+
+func generateRawToken(byteLength int) (string, error) {
+	if byteLength <= 0 {
+		return "", errors.New("invalid token length")
+	}
+	buf := make([]byte, byteLength)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buf), nil
+}
+
+func hashToken(raw string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(raw)))
+	return hex.EncodeToString(sum[:])
 }

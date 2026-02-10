@@ -2,9 +2,21 @@ export interface User {
   id: string;
   email: string;
   name: string;
+  role: 'user' | 'admin';
   nectar_balance: number;
   total_nectar_earned: number;
   created_at: string;
+}
+
+export interface AuthSession {
+  id: string;
+  user_id: string;
+  user_agent: string;
+  ip_address: string;
+  expires_at: string;
+  revoked_at?: string;
+  created_at: string;
+  last_used_at: string;
 }
 
 export interface Goal {
@@ -121,4 +133,5 @@ export interface Insight {
 export interface AuthResponse {
   user: User;
   token: string;
+  refresh_token?: string;
 }

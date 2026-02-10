@@ -2,12 +2,36 @@ name: CI
 
 on:
   push:
-    branches: [dev, main]
+    branches: [dev, stage, prod]
   pull_request:
+    branches: [dev, stage, prod]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  release-phase:
+    runs-on: ubuntu-latest
+    outputs:
+      phase: ${{ steps.phase.outputs.value }}
+    steps:
+      - id: phase
+        shell: bash
+        run: |
+          case "${GITHUB_REF_NAME}" in
+            dev) echo "value=internal-testing" >> "$GITHUB_OUTPUT" ;;
+            stage) echo "value=open-testing" >> "$GITHUB_OUTPUT" ;;
+            prod) echo "value=release" >> "$GITHUB_OUTPUT" ;;
+            *) echo "value=unknown" >> "$GITHUB_OUTPUT" ;;
+          esac
+      - name: Print branch phase
+        run: echo "Branch ${{ github.ref_name }} mapped to phase ${{ steps.phase.outputs.value }}"
+
   backend-build:
     runs-on: ubuntu-latest
+    needs: release-phase
     defaults:
       run:
         working-directory: backend
@@ -23,6 +47,7 @@ jobs:
 
   telegram-bot-build:
     runs-on: ubuntu-latest
+    needs: release-phase
     defaults:
       run:
         working-directory: telegram-bot
@@ -36,6 +61,7 @@ jobs:
 
   frontend-build:
     runs-on: ubuntu-latest
+    needs: release-phase
     defaults:
       run:
         working-directory: frontend
@@ -55,7 +81,22 @@ jobs:
 
   compose-validate:
     runs-on: ubuntu-latest
+    needs: release-phase
     steps:
       - uses: actions/checkout@v4
       - name: Validate docker compose
         run: docker compose config
+
+  phase-gate:
+    runs-on: ubuntu-latest
+    needs: [release-phase, backend-build, telegram-bot-build, frontend-build, compose-validate]
+    steps:
+      - name: Internal testing gate
+        if: github.ref == 'refs/heads/dev'
+        run: echo "Internal testing pipeline passed for dev."
+      - name: Open testing gate
+        if: github.ref == 'refs/heads/stage'
+        run: echo "Open testing pipeline passed for stage."
+      - name: Release gate
+        if: github.ref == 'refs/heads/prod'
+        run: echo "Release pipeline passed for prod."

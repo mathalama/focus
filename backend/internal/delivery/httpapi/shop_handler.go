@@ -50,4 +50,7 @@ func (h *Handler) BuyItem(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"user_item": userItem})
+	h.trackEvent(c.Request.Context(), userID, "shop.buy_item", map[string]any{
+		"item_id": itemID,
+	})
 }

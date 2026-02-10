@@ -65,6 +65,11 @@ func (h *Handler) StartSession(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"session": session})
+	h.trackEvent(c.Request.Context(), userID, "session.start", map[string]any{
+		"goal_id":             req.GoalID,
+		"recommended_minutes": session.RecommendedMinutes,
+		"is_strict":           session.IsStrict,
+	})
 }
 
 func (h *Handler) GetActiveSession(c *gin.Context) {
@@ -160,8 +165,28 @@ func (h *Handler) ResumeSession(c *gin.Context) {
 }
 
 func (h *Handler) AbandonSession(c *gin.Context) {
-	h.sessionAction(c, func(userID, sessionID string) (any, error) {
-		return h.session.Abandon(c.Request.Context(), userID, sessionID)
+	userID := getUserID(c)
+	sessionID, ok := validateSessionID(c)
+	if !ok {
+		return
+	}
+	session, err := h.session.Abandon(c.Request.Context(), userID, sessionID)
+	if errors.Is(err, domain.ErrInvalidState) {
+		respondError(c, http.StatusConflict, "session cannot perform this action")
+		return
+	}
+	if errors.Is(err, domain.ErrNotFound) {
+		respondError(c, http.StatusNotFound, "session not found")
+		return
+	}
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "action failed")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"session": session})
+	h.trackEvent(c.Request.Context(), userID, "session.abandon", map[string]any{
+		"session_id": sessionID,
 	})
 }
 
@@ -172,8 +197,28 @@ func (h *Handler) ResetSession(c *gin.Context) {
 }
 
 func (h *Handler) CompleteSession(c *gin.Context) {
-	h.sessionAction(c, func(userID, sessionID string) (any, error) {
-		return h.session.Complete(c.Request.Context(), userID, sessionID)
+	userID := getUserID(c)
+	sessionID, ok := validateSessionID(c)
+	if !ok {
+		return
+	}
+	session, err := h.session.Complete(c.Request.Context(), userID, sessionID)
+	if errors.Is(err, domain.ErrInvalidState) {
+		respondError(c, http.StatusConflict, "session cannot perform this action")
+		return
+	}
+	if errors.Is(err, domain.ErrNotFound) {
+		respondError(c, http.StatusNotFound, "session not found")
+		return
+	}
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "action failed")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"session": session})
+	h.trackEvent(c.Request.Context(), userID, "session.complete", map[string]any{
+		"session_id": sessionID,
 	})
 }
 

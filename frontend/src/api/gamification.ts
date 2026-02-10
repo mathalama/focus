@@ -1,4 +1,4 @@
-import { API_BASE_URL, getAuthHeaders } from './client';
+import { API_BASE_URL, createIdempotencyKey, getAuthHeaders } from './client';
 
 export const gamificationAPI = {
   leaderboard: async () => {
@@ -20,7 +20,7 @@ export const gamificationAPI = {
   buy: async (itemID: string) => {
     const res = await fetch(`${API_BASE_URL}/api/v1/shop/items/${itemID}/buy`, {
       method: 'POST',
-      headers: getAuthHeaders(),
+      headers: { ...getAuthHeaders(), 'Idempotency-Key': createIdempotencyKey() },
     });
     if (!res.ok) throw new Error('Failed to buy item');
     return res.json();

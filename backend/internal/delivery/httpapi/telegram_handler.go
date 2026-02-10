@@ -38,6 +38,7 @@ func (h *Handler) CreateTelegramLinkCode(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"code": code, "expires_at": expiresAt.UTC()})
+	h.trackEvent(c.Request.Context(), userID, "telegram.link_code.created", nil)
 }
 
 func (h *Handler) GetTelegramIdentity(c *gin.Context) {
@@ -63,6 +64,7 @@ func (h *Handler) UnlinkTelegram(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"unlinked": true})
+	h.trackEvent(c.Request.Context(), userID, "telegram.unlinked", nil)
 }
 
 func (h *Handler) TelegramStatusByUserID(c *gin.Context) {
@@ -129,6 +131,10 @@ func (h *Handler) TelegramSetNotificationsByUserID(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"updated": true, "notifications_enabled": req.Enabled})
+	h.trackEvent(c.Request.Context(), "", "telegram.notifications.updated", map[string]any{
+		"telegram_user_id":      req.TelegramUserID,
+		"notifications_enabled": req.Enabled,
+	})
 }
 
 type telegramLinkByCodeRequest struct {
@@ -186,5 +192,8 @@ func (h *Handler) TelegramLinkByCode(c *gin.Context) {
 			"name":  user.Name,
 			"email": user.Email,
 		},
+	})
+	h.trackEvent(c.Request.Context(), user.ID, "telegram.linked", map[string]any{
+		"telegram_user_id": req.TelegramUserID,
 	})
 }

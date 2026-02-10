@@ -1,5 +1,5 @@
 import type { SessionHistoryEntry, SessionHistoryFilters, SessionHistorySummary } from '../types';
-import { API_BASE_URL, getAuthHeaders, normalizeSessionResponse } from './client';
+import { API_BASE_URL, createIdempotencyKey, getAuthHeaders, normalizeSessionResponse } from './client';
 
 export const sessionsAPI = {
   start: async (data: { goal_id: string; recommended_minutes: number; is_strict: boolean }) => {
@@ -67,7 +67,7 @@ export const sessionsAPI = {
   complete: async (sessionID: string) => {
     const res = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionID}/complete`, {
       method: 'PATCH',
-      headers: getAuthHeaders(),
+      headers: { ...getAuthHeaders(), 'Idempotency-Key': createIdempotencyKey() },
     });
     if (!res.ok) throw new Error('Failed to complete session');
     return normalizeSessionResponse(await res.json());

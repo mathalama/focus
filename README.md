@@ -70,6 +70,7 @@ Endpoints:
 
 - Frontend: `http://localhost:5173`
 - Backend health: `http://localhost:8080/health`
+- Backend metrics: `http://localhost:8080/metrics`
 - Telegram bot internal API health: `http://localhost:8091/health`
 
 ## Local Backend/Bot Without Docker
@@ -105,11 +106,16 @@ Backend (`backend/.env`):
 - `CORS_ORIGIN=http://localhost:5173`
 - `JWT_SECRET=dev-secret-change-me`
 - `ENABLE_DEV_LOGIN=true`
+- `REFRESH_SESSION_TTL_HOURS=720`
+- `MAX_ACTIVE_AUTH_SESSIONS=5`
+- `AUTH_SESSION_BIND_CLIENT=true`
 - `MAX_SESSION_PAUSES=3`
 - `TELEGRAM_BOT_AUTH_TOKEN=dev-telegram-bot-auth-change-me`
 - `TELEGRAM_LINK_CODE_TTL_MINUTES=10`
 - `RESEND_API_KEY=`
 - `RESEND_FROM_EMAIL=`
+- `EMAIL_OUTBOX_POLL_SECONDS=2`
+- `EMAIL_OUTBOX_MAX_ATTEMPTS=5`
 - `EMAIL_VERIFY_URL_BASE=http://localhost:8080/api/v1/auth/verify-email`
 - `EMAIL_VERIFY_SUCCESS_REDIRECT=http://localhost:5173/login?verified=1`
 - `EMAIL_VERIFY_FAIL_REDIRECT=http://localhost:5173/login?verified=0`
@@ -133,3 +139,43 @@ Frontend (`frontend/.env`):
 - `ENABLE_DEV_LOGIN` should be `false` outside local development.
 - Compose sets `ENABLE_DEV_LOGIN=false` for the `backend` service.
 - Keep `.env` files local; they are ignored by git.
+- For critical write routes, include `Idempotency-Key` header:
+  - `PATCH /api/v1/sessions/:sessionID/complete`
+  - `POST /api/v1/shop/items/:itemID/buy`
+  - `POST /api/v1/integrations/telegram/link`
+
+## Auth v2
+
+- Login returns:
+  - `token` (access JWT)
+  - `refresh_token`
+- New auth endpoints:
+  - `POST /api/v1/auth/refresh`
+  - `POST /api/v1/auth/logout`
+  - `POST /api/v1/auth/logout-all` (Bearer)
+  - `GET /api/v1/auth/sessions` (Bearer)
+
+## Admin API
+
+- `GET /api/v1/admin/health` (Bearer, admin role)
+- `GET /api/v1/admin/email-deliveries` (Bearer, admin role)
+- `GET /api/v1/admin/events` (Bearer, admin role)
+
+## Product Observability
+
+- Structured JSON request logs with `request_id` (`X-Request-ID`).
+- Built-in Prometheus metrics on `/metrics`.
+- Product events persisted in `product_events`.
+- Email verification messages are sent via async DB outbox (`email_outbox`) with retry/backoff statuses.
+
+## Branching and Release Flow
+
+- `dev`: internal testing branch.
+- `stage`: open testing branch.
+- `prod`: full production release branch.
+
+CI is branch-aware and runs the same build validation for all three branches, then marks the phase gate:
+
+- `dev` -> `internal-testing`
+- `stage` -> `open-testing`
+- `prod` -> `release`

@@ -16,5 +16,8 @@ var (
 	ErrEmailNotVerified      = errors.New("email is not verified")
 	ErrInvalidCredentials    = errors.New("invalid email or password")
 	ErrEmailNotConfigured    = errors.New("email verification is not configured")
+	ErrRefreshTokenInvalid   = errors.New("refresh token is invalid or expired")
+	ErrAuthUnavailable       = errors.New("authentication service is temporarily unavailable")
+	ErrForbidden             = errors.New("forbidden")
 	ErrInsufficientBalance   = errors.New("insufficient nectar balance")
 )

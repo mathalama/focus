@@ -11,18 +11,26 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+func isSchemaMismatch(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && (pgErr.Code == "42P01" || pgErr.Code == "42703")
+}
+
 func (r *Repository) GetUser(ctx context.Context, userID string) (domain.User, error) {
 	const query = `
-		SELECT id, email, name, nectar_balance, total_nectar_earned, created_at
+		SELECT id, email, name, role, nectar_balance, total_nectar_earned, created_at
 		FROM users
 		WHERE id = $1
 	`
 
 	var user domain.User
 	if err := r.pool.QueryRow(ctx, query, userID).Scan(
-		&user.ID, &user.Email, &user.Name,
+		&user.ID, &user.Email, &user.Name, &user.Role,
 		&user.NectarBalance, &user.TotalNectarEarned, &user.CreatedAt,
 	); err != nil {
+		if isSchemaMismatch(err) {
+			return domain.User{}, domain.ErrAuthUnavailable
+		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.User{}, domain.ErrNotFound
 		}
@@ -38,14 +46,17 @@ func (r *Repository) DevLogin(ctx context.Context, email, name string) (domain.U
 		VALUES ($1, $2)
 		ON CONFLICT (email) DO UPDATE SET
 			name = EXCLUDED.name
-		RETURNING id, email, name, nectar_balance, total_nectar_earned, created_at
+		RETURNING id, email, name, role, nectar_balance, total_nectar_earned, created_at
 	`
 
 	var user domain.User
 	if err := r.pool.QueryRow(ctx, query, email, name).Scan(
-		&user.ID, &user.Email, &user.Name,
+		&user.ID, &user.Email, &user.Name, &user.Role,
 		&user.NectarBalance, &user.TotalNectarEarned, &user.CreatedAt,
 	); err != nil {
+		if isSchemaMismatch(err) {
+			return domain.User{}, domain.ErrAuthUnavailable
+		}
 		return domain.User{}, fmt.Errorf("upsert user: %w", err)
 	}
 
@@ -56,17 +67,20 @@ func (r *Repository) RegisterUser(ctx context.Context, email, name, passwordHash
 	const query = `
 		INSERT INTO users (email, name, password_hash)
 		VALUES ($1, $2, $3)
-		RETURNING id, email, name, nectar_balance, total_nectar_earned, created_at
+		RETURNING id, email, name, role, nectar_balance, total_nectar_earned, created_at
 	`
 
 	var user domain.User
 	if err := r.pool.QueryRow(ctx, query, email, name, passwordHash).Scan(
-		&user.ID, &user.Email, &user.Name,
+		&user.ID, &user.Email, &user.Name, &user.Role,
 		&user.NectarBalance, &user.TotalNectarEarned, &user.CreatedAt,
 	); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return domain.User{}, domain.ErrAlreadyExists
+		}
+		if isSchemaMismatch(err) {
+			return domain.User{}, domain.ErrAuthUnavailable
 		}
 		return domain.User{}, fmt.Errorf("register user: %w", err)
 	}
@@ -76,17 +90,20 @@ func (r *Repository) RegisterUser(ctx context.Context, email, name, passwordHash
 
 func (r *Repository) GetAuthUserByEmail(ctx context.Context, email string) (domain.AuthUser, error) {
 	const query = `
-		SELECT id, email, name, nectar_balance, total_nectar_earned, created_at, password_hash, email_verified_at
+		SELECT id, email, name, role, nectar_balance, total_nectar_earned, created_at, password_hash, email_verified_at
 		FROM users
 		WHERE email = $1
 	`
 
 	var result domain.AuthUser
 	if err := r.pool.QueryRow(ctx, query, email).Scan(
-		&result.User.ID, &result.User.Email, &result.User.Name,
+		&result.User.ID, &result.User.Email, &result.User.Name, &result.User.Role,
 		&result.User.NectarBalance, &result.User.TotalNectarEarned, &result.User.CreatedAt,
 		&result.PasswordHash, &result.EmailVerifiedAt,
 	); err != nil {
+		if isSchemaMismatch(err) {
+			return domain.AuthUser{}, domain.ErrAuthUnavailable
+		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.AuthUser{}, domain.ErrNotFound
 		}
