@@ -27,6 +27,10 @@ func clampScore(value float64) float64 {
 	if value > 100 {
 		return 100
 	}
+	return roundToTenth(value)
+}
+
+func roundToTenth(value float64) float64 {
 	return math.Round(value*10) / 10
 }
 

@@ -821,10 +821,52 @@ components:
     AnalyticsOverview:
       type: object
       properties:
-        completed_goals: { type: integer }
-        calm_score: { type: number }
-        focus_stability: { type: number }
-        total_nectar_earned: { type: integer }
+        completed_goals:
+          type: integer
+          description: Number of goals that have completed_at set.
+        calm_score:
+          type: number
+          description: Average session score (0..100). For completed sessions base is 100 with penalties -9 per pause and -12 per logged interruption; for non-completed base is 55 with lighter penalties.
+        focus_stability:
+          type: number
+          description: Average stability score (0..100) by session status. completed=100, paused=70, other statuses=50.
+        calm_score_base:
+          type: number
+          description: Average base part of calm score before penalties (100 for completed sessions, 55 for other statuses).
+        calm_score_pause_penalty:
+          type: number
+          description: Average pause penalty contribution deducted from calm score.
+        calm_score_interruption_penalty:
+          type: number
+          description: Average interruption penalty contribution deducted from calm score.
+        sessions_total:
+          type: integer
+          description: Total count of user sessions included in analytics.
+        completed_sessions:
+          type: integer
+          description: Sessions with completed status.
+        paused_sessions:
+          type: integer
+          description: Sessions currently paused.
+        other_sessions:
+          type: integer
+          description: Sessions in statuses other than completed or paused.
+        total_pauses:
+          type: integer
+          description: Total pauses across all sessions.
+        total_interruptions:
+          type: integer
+          description: Total interruption events across all sessions.
+        primary_action:
+          type: string
+          description: Suggested next optimization action key.
+          enum: [start_sessions, complete_more_sessions, reduce_pauses, reduce_interruptions, stabilize_schedule, keep_momentum]
+        best_hour_of_day_utc:
+          type: integer
+          description: Most frequent UTC start hour for user's sessions (0..23). -1 when no sessions exist.
+        total_nectar_earned:
+          type: integer
+          description: Total earned points (sum of minutes from completed sessions).
     DailyActivity:
       type: object
       properties:

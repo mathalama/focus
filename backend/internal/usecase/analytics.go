@@ -19,7 +19,12 @@ func NewAnalyticsUseCase(analyticsRepo AnalyticsRepository, sessionRepo SessionR
 }
 
 func (uc *AnalyticsUseCase) Overview(ctx context.Context, userID string) (domain.AnalyticsOverview, error) {
-	return uc.analyticsRepo.AnalyticsOverview(ctx, userID)
+	overview, err := uc.analyticsRepo.AnalyticsOverview(ctx, userID)
+	if err != nil {
+		return domain.AnalyticsOverview{}, err
+	}
+	overview.PrimaryAction = pickPrimaryAction(overview)
+	return overview, nil
 }
 
 func (uc *AnalyticsUseCase) DailyActivity(ctx context.Context, userID, timezone string) ([]domain.DailyActivity, error) {
@@ -66,4 +71,36 @@ func (uc *AnalyticsUseCase) Insights(ctx context.Context, userID string) (domain
 	}
 
 	return insight, nil
+}
+
+func pickPrimaryAction(overview domain.AnalyticsOverview) string {
+	if overview.SessionsTotal == 0 {
+		return "start_sessions"
+	}
+
+	completionRate := float64(overview.CompletedSessions) / float64(maxInt(overview.SessionsTotal, 1))
+	if completionRate < 0.6 {
+		return "complete_more_sessions"
+	}
+
+	if overview.TotalPauses > 0 && overview.CalmScorePausePenalty >= overview.CalmScoreInterruptionPenalty {
+		return "reduce_pauses"
+	}
+
+	if overview.TotalInterruptions > 0 {
+		return "reduce_interruptions"
+	}
+
+	if overview.FocusStability < 75 || overview.PausedSessions*2 > maxInt(overview.CompletedSessions, 1) {
+		return "stabilize_schedule"
+	}
+
+	return "keep_momentum"
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

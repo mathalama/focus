@@ -157,11 +157,21 @@ type Reflection struct {
 }
 
 type AnalyticsOverview struct {
-	CompletedGoals    int     `json:"completed_goals"`
-	CalmScore         float64 `json:"calm_score"`
-	FocusStability    float64 `json:"focus_stability"`
-	BestHourOfDayUTC  int     `json:"best_hour_of_day_utc"`
-	TotalNectarEarned int     `json:"total_nectar_earned"`
+	CompletedGoals               int     `json:"completed_goals"`
+	CalmScore                    float64 `json:"calm_score"`
+	FocusStability               float64 `json:"focus_stability"`
+	BestHourOfDayUTC             int     `json:"best_hour_of_day_utc"`
+	TotalNectarEarned            int     `json:"total_nectar_earned"`
+	CalmScoreBase                float64 `json:"calm_score_base"`
+	CalmScorePausePenalty        float64 `json:"calm_score_pause_penalty"`
+	CalmScoreInterruptionPenalty float64 `json:"calm_score_interruption_penalty"`
+	SessionsTotal                int     `json:"sessions_total"`
+	CompletedSessions            int     `json:"completed_sessions"`
+	PausedSessions               int     `json:"paused_sessions"`
+	OtherSessions                int     `json:"other_sessions"`
+	TotalPauses                  int     `json:"total_pauses"`
+	TotalInterruptions           int     `json:"total_interruptions"`
+	PrimaryAction                string  `json:"primary_action"`
 }
 
 type Insight struct {

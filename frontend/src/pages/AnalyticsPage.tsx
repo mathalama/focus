@@ -255,6 +255,15 @@ const AnalyticsContent: React.FC<{
     setTooltip((prev) => ({ ...prev, visible: false }));
   };
 
+  const calmBase = Number(overview?.calm_score_base ?? 0).toFixed(1);
+  const calmPausePenalty = Number(overview?.calm_score_pause_penalty ?? 0).toFixed(1);
+  const calmInterruptionPenalty = Number(overview?.calm_score_interruption_penalty ?? 0).toFixed(1);
+  const completedSessions = overview?.completed_sessions ?? 0;
+  const sessionsTotal = overview?.sessions_total ?? 0;
+  const primaryAction = overview?.primary_action ?? 'start_sessions';
+  const totalPauses = overview?.total_pauses ?? 0;
+  const totalInterruptions = overview?.total_interruptions ?? 0;
+
   return (
     <div className="relative space-y-8 font-sans">
       <header className="border-b border-border pb-4">
@@ -269,27 +278,51 @@ const AnalyticsContent: React.FC<{
         <StatCard 
           icon={Target} 
           label={t('analytics.objectivesDone')} 
-          value={overview?.completed_goals ?? 0} 
+          value={overview?.completed_goals ?? 0}
+          hint={t('analytics.objectivesDoneHint')}
         />
         <StatCard 
           icon={Zap} 
           label={t('analytics.focusScore')} 
           value={Math.round(overview?.calm_score ?? 0)} 
           suffix="/ 100"
+          hint={t('analytics.focusScoreHint', {
+            base: calmBase,
+            pausePenalty: calmPausePenalty,
+            interruptionPenalty: calmInterruptionPenalty,
+          })}
         />
         <StatCard 
           icon={Activity} 
           label={t('analytics.stability')} 
           value={Math.round(overview?.focus_stability ?? 0)} 
           suffix="%"
+          hint={t('analytics.stabilityHint', {
+            completed: completedSessions,
+            total: sessionsTotal,
+          })}
         />
         <StatCard 
           icon={Award} 
           label={t('analytics.totalPoints')} 
           value={overview?.total_nectar_earned ?? 0} 
           className="text-accent"
+          hint={t('analytics.totalPointsHint')}
         />
       </div>
+
+      <Card className="bg-surface border-border shadow-none">
+        <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('analytics.nextStep')}</h2>
+        <p className="mt-2 text-sm text-primary">{t(`analytics.action.${primaryAction}`)}</p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {t('analytics.breakdown', {
+            completed: completedSessions,
+            total: sessionsTotal,
+            pauses: totalPauses,
+            interruptions: totalInterruptions,
+          })}
+        </p>
+      </Card>
 
       {/* Heatmap */}
       <Card ref={heatmapRef} className="bg-surface border-border shadow-none">
