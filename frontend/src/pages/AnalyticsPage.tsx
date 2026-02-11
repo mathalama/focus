@@ -377,18 +377,18 @@ const AnalyticsContent: React.FC<{
       <Card className="bg-surface border-border shadow-none p-6">
         <div className="mb-4 flex items-center gap-2">
           <BarChart3 size={16} className="text-accent" />
-          <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Сравнение с прошлой неделей</h2>
+          <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('analytics.comparison')}</h2>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <ComparisonCard
             current={weekComparison.thisWeek}
             previous={weekComparison.lastWeek}
-            label="Сессии на эту неделю"
+            label={t('analytics.thisWeek')}
           />
           <ComparisonCard
             current={Math.round(completedSessions / Math.max(1, weekComparison.thisWeek || 1))}
             previous={Math.round(completedSessions / Math.max(1, weekComparison.lastWeek || 1))}
-            label="Среднее за неделю"
+            label={t('analytics.lastWeek')}
           />
         </div>
       </Card>
@@ -397,55 +397,55 @@ const AnalyticsContent: React.FC<{
       <Card className="bg-surface border-border shadow-none p-6">
         <div className="mb-4 flex items-center gap-2">
           <Trophy size={16} className="text-accent" />
-          <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Достижения</h2>
+          <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('analytics.achievements')}</h2>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <AchievementBadge
             icon={<Rocket size={32} />}
-            title="Стартер"
-            description="Первая сессия"
+            title={t('achievement.starter.title')}
+            description={t('achievement.starter.desc')}
             unlocked={achievements.starter}
           />
           <AchievementBadge
             icon={<Star size={32} />}
-            title="Сфокусирован"
-            description="10 сессий"
+            title={t('achievement.focused.title')}
+            description={t('achievement.focused.desc')}
             unlocked={achievements.focused}
           />
           <AchievementBadge
             icon={<Gem size={32} />}
-            title="Преданный"
-            description="50 сессий"
+            title={t('achievement.dedicated.title')}
+            description={t('achievement.dedicated.desc')}
             unlocked={achievements.dedicated}
           />
           <AchievementBadge
             icon={<Crown size={32} />}
-            title="Легенда"
-            description="100 сессий"
+            title={t('achievement.legend.title')}
+            description={t('achievement.legend.desc')}
             unlocked={achievements.legend}
           />
           <AchievementBadge
             icon={<Flame size={32} />}
-            title="Недельная полоса"
-            description="7 дней подряд"
+            title={t('achievement.weekStreak.title')}
+            description={t('achievement.weekStreak.desc')}
             unlocked={achievements.weekStreak}
           />
           <AchievementBadge
             icon={<Lightbulb size={32} />}
-            title="Месячная полоса"
-            description="30 дней подряд"
+            title={t('achievement.monthStreak.title')}
+            description={t('achievement.monthStreak.desc')}
             unlocked={achievements.monthStreak}
           />
           <AchievementBadge
             icon={<Clock size={32} />}
-            title="Час фокуса"
-            description="60+ минут"
+            title={t('achievement.totalHours.title')}
+            description={t('achievement.totalHours.desc')}
             unlocked={achievements.totalHours}
           />
           <AchievementBadge
             icon={<Sparkles size={32} />}
-            title="Мастер"
-            description="Продолжай работать"
+            title={t('achievement.master.title')}
+            description={t('achievement.master.desc')}
             unlocked={false}
           />
         </div>

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useI18n } from '../../lib/i18n';
 import { 
   Flame, 
   TrendingUp, 
@@ -20,6 +21,7 @@ interface StreakBadgeProps {
  * Display current streak (consecutive days with sessions)
  */
 export const StreakBadge: React.FC<StreakBadgeProps> = ({ days, label }) => {
+  const { t } = useI18n();
   const isHotStreak = days >= 7;
   const isBurningStreak = days >= 14;
   
@@ -42,7 +44,7 @@ export const StreakBadge: React.FC<StreakBadgeProps> = ({ days, label }) => {
         }
       />
       <span className="text-sm font-mono font-bold text-primary">
-        {days} {label || 'дней подряд'}
+        {days} {label || t('streak.suffix')}
       </span>
     </div>
   );
@@ -121,40 +123,41 @@ interface MotivationMessageProps {
  * Show motivating message based on user's data
  */
 export const MotivationMessage: React.FC<MotivationMessageProps> = ({ sessionsCompleted, streak, minutesTotal }) => {
+  const { t } = useI18n();
   let message = '';
   let Icon = Zap;
   let iconColor = 'text-yellow-400';
 
   if (sessionsCompleted === 0) {
-    message = 'Начни свой путь - запусти первую сессию!';
+    message = t('motivation.start');
     Icon = Rocket;
     iconColor = 'text-blue-400';
   } else if (streak >= 30) {
-    message = `${streak} дней подряд! Ты легенда`;
+    message = t('motivation.legend', { days: streak });
     Icon = Crown;
     iconColor = 'text-yellow-400';
   } else if (streak >= 14) {
-    message = `${streak} дней горячей полосы! Продолжай в том же духе`;
+    message = t('motivation.hotStreak', { days: streak });
     Icon = Flame;
     iconColor = 'text-red-400';
   } else if (streak >= 7) {
-    message = `${streak} дней с фокусом - это здорово!`;
+    message = t('motivation.weekStreak', { days: streak });
     Icon = Star;
     iconColor = 'text-yellow-400';
   } else if (sessionsCompleted >= 100) {
-    message = 'Ты уже прошёл 100 сессий! Невероятно!';
+    message = t('motivation.100sessions');
     Icon = Trophy;
     iconColor = 'text-yellow-400';
   } else if (minutesTotal >= 500) {
-    message = `${minutesTotal} минут чистого фокуса. Ты получился таким сильным!`;
+    message = t('motivation.500minutes', { minutes: minutesTotal });
     Icon = Zap;
     iconColor = 'text-yellow-400';
   } else if (streak >= 3) {
-    message = `${streak} дня подряд - монастырь работает!`;
+    message = t('motivation.3days', { days: streak });
     Icon = Target;
     iconColor = 'text-green-400';
   } else if (sessionsCompleted > 0) {
-    message = `${sessionsCompleted} сессий завершено. Начало хорошее!`;
+    message = t('motivation.started', { sessions: sessionsCompleted });
     Icon = ThumbsUp;
     iconColor = 'text-green-400';
   }
