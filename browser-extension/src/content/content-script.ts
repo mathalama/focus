@@ -7,24 +7,98 @@ interface FocusSession {
   blockedSites: Array<{ domain: string; pattern: string; enabled: boolean }>;
 }
 
+// Helper to check if extension context is still valid
+function isExtensionContextValid(): boolean {
+  try {
+    // Try accessing chrome API
+    return chrome && chrome.storage ? true : false;
+  } catch {
+    return false;
+  }
+}
+
 // Listen for focus state changes from the website via localStorage
 window.addEventListener('storage', (event) => {
   if (event.key === 'focus-session-state' && event.newValue) {
     try {
+      if (!isExtensionContextValid()) {
+        console.warn('Extension context invalidated, reloading...');
+        window.location.reload();
+        return;
+      }
+
       const data = JSON.parse(event.newValue);
       const { state } = data;
       
       console.log('Content script received focus state change:', state);
       
       // Get blocked sites from extension storage
-      chrome.storage.local.get('defaultBlockedSites', (data) => {
+      try {
+        chrome.storage.local.get('defaultBlockedSites', (data) => {
+          try {
+            const blockedSites = (data.defaultBlockedSites || []).filter(
+              (site: any) => site.enabled
+            );
+            
+            // Update focus session state
+            if (state === 'active') {
+              // Get duration from sessionStorage if available (defaults to 25 min)
+              const duration = JSON.parse(sessionStorage.getItem('focus-session-info') || '{}').duration || 25;
+              
+              chrome.storage.local.set({
+                focusSession: {
+                  active: true,
+                  startTime: Date.now(),
+                  duration: duration * 60 * 1000,
+                  blockedSites: blockedSites
+                }
+              });
+            } else if (state === 'paused' || state === 'completed') {
+              chrome.storage.local.set({
+                focusSession: {
+                  active: false,
+                  startTime: 0,
+                  duration: 0,
+                  blockedSites: []
+                }
+              });
+            }
+          } catch (storageError) {
+            console.error('Storage operation error:', storageError);
+          }
+        });
+      } catch (chromeError) {
+        console.error('Chrome API error:', chromeError);
+      }
+    } catch (e) {
+      console.error('Error parsing focus state:', e);
+    }
+  }
+});
+
+// Also listen for custom events dispatched from page
+window.addEventListener('focus-session-changed', () => {
+  try {
+    if (!isExtensionContextValid()) {
+      console.warn('Extension context invalidated, reloading...');
+      window.location.reload();
+      return;
+    }
+
+    const data = JSON.parse(localStorage.getItem('focus-session-state') || '{}');
+    const { state } = data;
+    
+    console.log('Content script received focus state change (via custom event):', state);
+    
+    // Get blocked sites from extension storage
+    chrome.storage.local.get('defaultBlockedSites', (data) => {
+      try {
         const blockedSites = (data.defaultBlockedSites || []).filter(
           (site: any) => site.enabled
         );
         
         // Update focus session state
         if (state === 'active') {
-          // Get duration from sessionStorage if available (defaults to 25 min)
           const duration = JSON.parse(sessionStorage.getItem('focus-session-info') || '{}').duration || 25;
           
           chrome.storage.local.set({
@@ -45,48 +119,8 @@ window.addEventListener('storage', (event) => {
             }
           });
         }
-      });
-    } catch (e) {
-      console.error('Error parsing focus state:', e);
-    }
-  }
-});
-
-// Also listen for custom events dispatched from page
-window.addEventListener('focus-session-changed', () => {
-  try {
-    const data = JSON.parse(localStorage.getItem('focus-session-state') || '{}');
-    const { state } = data;
-    
-    console.log('Content script received focus state change (via custom event):', state);
-    
-    // Get blocked sites from extension storage
-    chrome.storage.local.get('defaultBlockedSites', (data) => {
-      const blockedSites = (data.defaultBlockedSites || []).filter(
-        (site: any) => site.enabled
-      );
-      
-      // Update focus session state
-      if (state === 'active') {
-        const duration = JSON.parse(sessionStorage.getItem('focus-session-info') || '{}').duration || 25;
-        
-        chrome.storage.local.set({
-          focusSession: {
-            active: true,
-            startTime: Date.now(),
-            duration: duration * 60 * 1000,
-            blockedSites: blockedSites
-          }
-        });
-      } else if (state === 'paused' || state === 'completed') {
-        chrome.storage.local.set({
-          focusSession: {
-            active: false,
-            startTime: 0,
-            duration: 0,
-            blockedSites: []
-          }
-        });
+      } catch (storageError) {
+        console.error('Storage operation error:', storageError);
       }
     });
   } catch (e) {
@@ -95,22 +129,31 @@ window.addEventListener('focus-session-changed', () => {
 });
 
 async function checkAndBlock(): Promise<void> {
-  const data = await chrome.storage.local.get('focusSession');
-  const session = data.focusSession as FocusSession;
-
-  if (!session.active) {
-    removeBlockingPage();
+  if (!isExtensionContextValid()) {
     return;
   }
 
-  const currentHost = window.location.hostname;
-  const isBlocked = session.blockedSites.some(
-    (site) => site.enabled && isHostMatching(currentHost, site.domain)
-  );
+  try {
+    const data = await chrome.storage.local.get('focusSession');
+    const session = data.focusSession as FocusSession;
 
-  if (isBlocked) {
-    showBlockingPage(session);
-  } else {
+    if (!session.active) {
+      removeBlockingPage();
+      return;
+    }
+
+    const currentHost = window.location.hostname;
+    const isBlocked = session.blockedSites.some(
+      (site) => site.enabled && isHostMatching(currentHost, site.domain)
+    );
+
+    if (isBlocked) {
+      showBlockingPage(session);
+    } else {
+      removeBlockingPage();
+    }
+  } catch (error) {
+    console.error('Error checking focus session:', error);
     removeBlockingPage();
   }
 }
@@ -228,7 +271,13 @@ function showBlockingPage(session: FocusSession): void {
   updateTimer(session);
 
   document.getElementById('end-focus')?.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ action: 'stopFocus' });
+    try {
+      if (isExtensionContextValid()) {
+        chrome.runtime.sendMessage({ action: 'stopFocus' });
+      }
+    } catch (error) {
+      console.error('Error sending stopFocus message:', error);
+    }
   });
 }
 
