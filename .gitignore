@@ -11,6 +11,9 @@ frontend/dist
 backend/api
 telegram-bot/bot
 
+# Browser Extension (kept local)
+browser-extension/
+
 # Logs
 *.log
 .vscode/

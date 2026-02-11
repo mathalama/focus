@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"mathalama-focus/backend/internal/domain"
+
 	"github.com/jackc/pgx/v5"
 )
 
@@ -26,13 +27,13 @@ func (r *Repository) GetSessionPreferences(ctx context.Context, userID string) (
 		if errors.Is(err, pgx.ErrNoRows) {
 			// Return default preferences
 			return domain.UserSessionPreferences{
-				UserID:                    userID,
-				PresetDurations:           []int{25, 45, 90},
-				DefaultDuration:           25,
-				ShortBreakDuration:        5,
-				LongBreakDuration:         15,
-				SessionsBeforeLongBreak:   4,
-				DefaultIsStrict:           false,
+				UserID:                  userID,
+				PresetDurations:         []int{25, 45, 90},
+				DefaultDuration:         25,
+				ShortBreakDuration:      5,
+				LongBreakDuration:       15,
+				SessionsBeforeLongBreak: 4,
+				DefaultIsStrict:         false,
 			}, nil
 		}
 		return domain.UserSessionPreferences{}, fmt.Errorf("get session preferences: %w", err)

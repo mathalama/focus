@@ -79,6 +79,35 @@ func (h *Handler) Health(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
+// HandleFocusEvent handles focus session events from browser extension
+func (h *Handler) HandleFocusEvent(c *gin.Context) {
+	userID := c.GetString("user_id")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	var req struct {
+		Action   string `json:"action" binding:"required,oneof=start stop"`
+		Duration int    `json:"duration"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Broadcast event to WebSocket clients
+	hub := GetFocusHub()
+	if req.Action == "start" {
+		hub.BroadcastFocusStarted(userID, req.Duration)
+	} else if req.Action == "stop" {
+		hub.BroadcastFocusStopped(userID)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
 // ---------- shared helpers ----------
 
 func respondError(c *gin.Context, status int, msg string) {

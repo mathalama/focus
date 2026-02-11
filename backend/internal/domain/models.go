@@ -198,27 +198,27 @@ type AuthUser struct {
 	EmailVerifiedAt *time.Time `json:"-"`
 }
 type UserSessionPreferences struct {
-	ID                        string `json:"id"`
-	UserID                    string `json:"user_id"`
-	PresetDurations           []int  `json:"preset_durations"` // [25, 45, 90] etc
-	DefaultDuration           int    `json:"default_duration"`
-	ShortBreakDuration        int    `json:"short_break_duration"`
-	LongBreakDuration         int    `json:"long_break_duration"`
-	SessionsBeforeLongBreak   int    `json:"sessions_before_long_break"`
-	DefaultIsStrict           bool   `json:"default_is_strict"`
-	CreatedAt                 time.Time `json:"created_at"`
-	UpdatedAt                 time.Time `json:"updated_at"`
+	ID                      string    `json:"id"`
+	UserID                  string    `json:"user_id"`
+	PresetDurations         []int     `json:"preset_durations"` // [25, 45, 90] etc
+	DefaultDuration         int       `json:"default_duration"`
+	ShortBreakDuration      int       `json:"short_break_duration"`
+	LongBreakDuration       int       `json:"long_break_duration"`
+	SessionsBeforeLongBreak int       `json:"sessions_before_long_break"`
+	DefaultIsStrict         bool      `json:"default_is_strict"`
+	CreatedAt               time.Time `json:"created_at"`
+	UpdatedAt               time.Time `json:"updated_at"`
 }
 
 type NotificationSchedule struct {
-	ID               string    `json:"id"`
-	UserID           string    `json:"user_id"`
-	Enabled          bool      `json:"enabled"`
-	Timezone         string    `json:"timezone"`
-	DaysOfWeek       []int     `json:"days_of_week"` // 0-6 (Monday-Sunday)
-	ReminderTime     string    `json:"reminder_time"` // HH:MM format
-	NotificationType string    `json:"notification_type"` // start_session | daily_summary | motivational
+	ID               string     `json:"id"`
+	UserID           string     `json:"user_id"`
+	Enabled          bool       `json:"enabled"`
+	Timezone         string     `json:"timezone"`
+	DaysOfWeek       []int      `json:"days_of_week"`      // 0-6 (Monday-Sunday)
+	ReminderTime     string     `json:"reminder_time"`     // HH:MM format
+	NotificationType string     `json:"notification_type"` // start_session | daily_summary | motivational
 	LastSentAt       *time.Time `json:"last_sent_at,omitempty"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }

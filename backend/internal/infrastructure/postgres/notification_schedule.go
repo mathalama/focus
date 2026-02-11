@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"mathalama-focus/backend/internal/domain"
+
 	"github.com/jackc/pgx/v5"
 )
 
@@ -94,7 +95,7 @@ func (r *Repository) UpdateNotificationSchedule(ctx context.Context, userID, sch
 
 func (r *Repository) DeleteNotificationSchedule(ctx context.Context, userID, scheduleID string) error {
 	const query = `DELETE FROM notification_schedules WHERE id = $1 AND user_id = $2`
-	
+
 	result, err := r.pool.Exec(ctx, query, scheduleID, userID)
 	if err != nil {
 		return fmt.Errorf("delete notification schedule: %w", err)
@@ -142,7 +143,7 @@ func (r *Repository) GetSchedulesReadyToSend(ctx context.Context) ([]domain.Noti
 // UpdateLastSentAt updates the last_sent_at timestamp
 func (r *Repository) UpdateLastSentAt(ctx context.Context, scheduleID string) error {
 	const query = `UPDATE notification_schedules SET last_sent_at = NOW() WHERE id = $1`
-	
+
 	_, err := r.pool.Exec(ctx, query, scheduleID)
 	return err
 }

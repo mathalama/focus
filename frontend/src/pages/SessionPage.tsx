@@ -9,11 +9,13 @@ import { addMinutes, differenceInSeconds, parseISO } from 'date-fns';
 import { useI18n } from '../lib/i18n';
 import { playSound } from '../lib/sounds';
 import { requestNotificationPermission, notifySessionComplete, notifyBreakEnd } from '../lib/notifications';
+import { useExtensionSync } from '../hooks/useExtensionSync';
 
 export const SessionPage: React.FC = () => {
   const { t } = useI18n();
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
+  const { notifyExtension } = useExtensionSync();
   const [session, setSession] = useState<FocusSession | null>(null);
   const [completedCount, setCompletedCount] = useState(0);
   const sessionRef = useRef<FocusSession | null>(null);
@@ -30,6 +32,26 @@ export const SessionPage: React.FC = () => {
 
   // Keep ref in sync with state
   useEffect(() => { sessionRef.current = session; }, [session]);
+
+  // Notify extension about focus state changes
+  useEffect(() => {
+    if (!session) return;
+    
+    // Store session info for content script to read
+    if (session.status === 'active') {
+      sessionStorage.setItem('focus-session-info', JSON.stringify({
+        duration: session.recommended_minutes,
+        startedAt: session.started_at
+      }));
+      notifyExtension('active');
+    } else if (session.status === 'paused') {
+      sessionStorage.removeItem('focus-session-info');
+      notifyExtension('paused');
+    } else if (session.status === 'completed' || session.status === 'abandoned') {
+      sessionStorage.removeItem('focus-session-info');
+      notifyExtension('completed');
+    }
+  }, [session?.status, session?.recommended_minutes, session?.started_at, notifyExtension]);
 
   const syncTimeFromSession = useCallback((nextSession: FocusSession) => {
     const startDate = parseISO(nextSession.started_at);

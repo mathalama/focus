@@ -98,7 +98,7 @@ func main() {
 
 	// Delivery
 	handler := httpapi.NewHandler(authUC, sessionUC, goalUC, analyticsUC, shopUC, telegramUC, notificationUC, preferencesUC, repo, emailOutbox, repo, cfg.TelegramBotAuthToken)
-	router := httpapi.NewRouter(handler, cfg.CorsOrigin, cfg.EnableDevLogin, jwtSvc.ValidateToken)
+	router := httpapi.NewRouter(handler, cfg.CorsOrigin, cfg.EnableDevLogin, jwtSvc.ValidateToken, cfg.JWTSecret)
 
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%s", cfg.Port),

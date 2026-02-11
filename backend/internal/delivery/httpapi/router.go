@@ -9,7 +9,10 @@ import (
 )
 
 // NewRouter builds the Gin engine with all routes wired.
-func NewRouter(handler *Handler, corsOrigin string, enableDevLogin bool, validateToken func(string) (string, error)) *gin.Engine {
+func NewRouter(handler *Handler, corsOrigin string, enableDevLogin bool, validateToken func(string) (string, error), jwtSecret string) *gin.Engine {
+	// Set JWT secret for WebSocket token validation
+	SetJWTSecret(jwtSecret)
+
 	router := gin.New()
 	router.Use(RequestIDMiddleware(), StructuredLogger(), MetricsMiddleware(), gin.Recovery())
 	router.Use(cors.New(cors.Config{
@@ -97,6 +100,10 @@ func NewRouter(handler *Handler, corsOrigin string, enableDevLogin bool, validat
 
 		api.GET("/shop/items", handler.ListItems)
 		api.POST("/shop/items/:itemID/buy", userIdempotency, handler.BuyItem)
+
+		// WebSocket for focus session updates
+		api.GET("/ws/focus", HandleFocusWebSocket)
+		api.POST("/focus/event", handler.HandleFocusEvent)
 
 		admin := api.Group("/admin")
 		{

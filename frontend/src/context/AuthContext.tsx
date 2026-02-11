@@ -28,6 +28,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setRefreshToken(newRefreshToken);
     }
     localStorage.setItem('user', JSON.stringify(newUser));
+    // Save token for browser extension
+    localStorage.setItem('focus_api_token', newToken);
+    localStorage.setItem('focus_api_url', window.location.origin);
     setToken(newToken);
     setUser(newUser);
     setAuthChecked(true);
@@ -42,6 +45,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('user');
+    // Clear extension token
+    localStorage.removeItem('focus_api_token');
+    localStorage.removeItem('focus_api_url');
     setToken(null);
     setRefreshToken(null);
     setUser(null);
@@ -124,6 +130,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw error;
     }
   }, [token, logout]);
+
+  // Sync auth token with browser extension
+  useEffect(() => {
+    if (token) {
+      localStorage.setItem('focus_api_token', token);
+      localStorage.setItem('focus_api_url', window.location.origin);
+    } else {
+      localStorage.removeItem('focus_api_token');
+      localStorage.removeItem('focus_api_url');
+    }
+  }, [token]);
 
   return (
     <AuthContext.Provider value={{ user, token, refreshToken, login, logout, refreshUser, authChecked, isAuthenticated: !!token && !!user }}>

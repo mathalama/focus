@@ -42,16 +42,14 @@ async function initStorage() {
   }
 }
 
-// Listen for messages from popup
+// Listen for messages from content script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'startFocus') {
-    startFocusSession(request.duration, request.blockedSites).then(sendResponse);
-  } else if (request.action === 'stopFocus') {
-    stopFocusSession().then(sendResponse);
-  } else if (request.action === 'getFocusStatus') {
+  if (request.action === 'getFocusStatus') {
     getFocusStatus().then(sendResponse);
-  } else if (request.action === 'updateBlockedSites') {
-    updateBlockedSites(request.sites).then(sendResponse);
+  } else if (request.action === 'focusStateChanged') {
+    // Focus state changed from website via content script
+    console.log('Focus state changed:', request.state);
+    sendResponse({ ok: true });
   }
   return true; // Will respond asynchronously
 });
@@ -60,18 +58,16 @@ async function startFocusSession(duration: number, blockedSites: BlockedSite[]):
   const session: FocusSession = {
     active: true,
     startTime: Date.now(),
-    duration: duration * 60 * 1000, // Convert to milliseconds
+    duration: duration * 60 * 1000,
     blockedSites: blockedSites
   };
 
   await chrome.storage.local.set({ focusSession: session });
   
-  // Set up timer to end session
   setTimeout(() => {
     endFocusSession();
   }, session.duration);
 
-  // Update icon and badge
   await updateIcon(true, duration);
 
   return true;
@@ -93,10 +89,11 @@ async function stopFocusSession(): Promise<boolean> {
 
 async function endFocusSession(): Promise<void> {
   await stopFocusSession();
+  
   // Show notification that focus session ended
   chrome.notifications.create('focusComplete', {
     type: 'basic',
-    iconUrl: 'assets/icon-128.png',
+    iconUrl: 'assets/icon-48.svg',
     title: 'Focus Session Complete!',
     message: 'Great work on staying focused!'
   });
@@ -133,15 +130,26 @@ async function updateIcon(active: boolean, remainingMinutes: number): Promise<vo
   }
 }
 
+// Listen for storage changes
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !changes.focusSession) return;
+
+  const newSession = changes.focusSession.newValue as FocusSession | undefined;
+  
+  if (newSession?.active) {
+    const remainingMinutes = Math.ceil(newSession.duration / 60000);
+    updateIcon(true, remainingMinutes);
+    
+    // Schedule end of session
+    setTimeout(() => {
+      endFocusSession();
+    }, newSession.duration);
+  } else {
+    updateIcon(false, 0);
+  }
+});
+
 // Initialize on install/update
 chrome.runtime.onInstalled.addListener(() => {
   initStorage();
-});
-
-// Keep service worker warm
-chrome.alarms.create('keepAlive', { periodInMinutes: 1 });
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === 'keepAlive') {
-    // Just a ping to keep worker alive
-  }
 });

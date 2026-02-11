@@ -4,8 +4,10 @@
   "description": "Browser extension for Mathalama Focus Mode",
   "type": "module",
   "scripts": {
-    "build": "esbuild src/**/*.ts --bundle --outdir=dist --platform=browser --external:chrome",
-    "dev": "esbuild src/**/*.ts --bundle --outdir=dist --platform=browser --external:chrome --watch",
+    "build": "npm run bundle && npm run copy-assets",
+    "bundle": "esbuild src/popup/popup.ts --bundle --outdir=dist/popup --platform=browser --external:chrome && esbuild src/background/service-worker.ts --bundle --outdir=dist/background --platform=browser --external:chrome && esbuild src/content/content-script.ts --bundle --outdir=dist/content --platform=browser --external:chrome",
+    "copy-assets": "cp manifest.json dist/ && cp src/popup/popup.html dist/ && mkdir -p dist/assets && cp assets/* dist/assets/ 2>/dev/null || true",
+    "dev": "npm run copy-assets && esbuild src/popup/popup.ts src/background/service-worker.ts src/content/content-script.ts --bundle --outdir=dist --platform=browser --external:chrome --watch",
     "type-check": "tsc --noEmit"
   },
   "devDependencies": {
