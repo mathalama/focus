@@ -21,29 +21,74 @@ func (r *Repository) AnalyticsOverview(ctx context.Context, userID string) (doma
 	}
 
 	const scoreQuery = `
+		WITH interruption_counts AS (
+			SELECT session_id, COUNT(*)::INT AS interruptions
+			FROM interruptions
+			WHERE kind = 'interruption'
+			GROUP BY session_id
+		),
+		session_stats AS (
+			SELECT
+				fs.status,
+				fs.pause_count,
+				COALESCE(i.interruptions, 0) AS interruptions
+			FROM focus_sessions fs
+			LEFT JOIN interruption_counts i ON i.session_id = fs.id
+			WHERE fs.user_id = $1
+		)
 		SELECT
 			COALESCE(AVG(
 				CASE
-					WHEN fs.status = 'completed' THEN 100 - (fs.pause_count * 9 + COALESCE(i.interruptions, 0) * 12)
-					ELSE 55 - (fs.pause_count * 6 + COALESCE(i.interruptions, 0) * 8)
+					WHEN status = 'completed' THEN 100 - (pause_count * 9 + interruptions * 12)
+					ELSE 55 - (pause_count * 6 + interruptions * 8)
 				END
 			), 0) AS calm_score,
 			COALESCE(AVG(
 				CASE
-					WHEN fs.status = 'completed' THEN 100
-					WHEN fs.status = 'paused' THEN 70
+					WHEN status = 'completed' THEN 100
+					WHEN status = 'paused' THEN 70
 					ELSE 50
 				END
-			), 0) AS focus_stability
-		FROM focus_sessions fs
-		LEFT JOIN (
-			SELECT session_id, COUNT(*)::INT AS interruptions
-			FROM interruptions WHERE kind = 'interruption'
-			GROUP BY session_id
-		) i ON i.session_id = fs.id
-		WHERE fs.user_id = $1
+			), 0) AS focus_stability,
+			COALESCE(AVG(
+				CASE
+					WHEN status = 'completed' THEN 100
+					ELSE 55
+				END
+			), 0) AS calm_score_base,
+			COALESCE(AVG(
+				CASE
+					WHEN status = 'completed' THEN pause_count * 9
+					ELSE pause_count * 6
+				END
+			), 0) AS calm_score_pause_penalty,
+			COALESCE(AVG(
+				CASE
+					WHEN status = 'completed' THEN interruptions * 12
+					ELSE interruptions * 8
+				END
+			), 0) AS calm_score_interruption_penalty,
+			COUNT(*)::INT AS sessions_total,
+			COUNT(*) FILTER (WHERE status = 'completed')::INT AS completed_sessions,
+			COUNT(*) FILTER (WHERE status = 'paused')::INT AS paused_sessions,
+			COUNT(*) FILTER (WHERE status NOT IN ('completed', 'paused'))::INT AS other_sessions,
+			COALESCE(SUM(pause_count), 0)::INT AS total_pauses,
+			COALESCE(SUM(interruptions), 0)::INT AS total_interruptions
+		FROM session_stats
 	`
-	if err := r.pool.QueryRow(ctx, scoreQuery, userID).Scan(&overview.CalmScore, &overview.FocusStability); err != nil {
+	if err := r.pool.QueryRow(ctx, scoreQuery, userID).Scan(
+		&overview.CalmScore,
+		&overview.FocusStability,
+		&overview.CalmScoreBase,
+		&overview.CalmScorePausePenalty,
+		&overview.CalmScoreInterruptionPenalty,
+		&overview.SessionsTotal,
+		&overview.CompletedSessions,
+		&overview.PausedSessions,
+		&overview.OtherSessions,
+		&overview.TotalPauses,
+		&overview.TotalInterruptions,
+	); err != nil {
 		return domain.AnalyticsOverview{}, fmt.Errorf("load overview scores: %w", err)
 	}
 
@@ -67,6 +112,9 @@ func (r *Repository) AnalyticsOverview(ctx context.Context, userID string) (doma
 
 	overview.CalmScore = clampScore(overview.CalmScore)
 	overview.FocusStability = clampScore(overview.FocusStability)
+	overview.CalmScoreBase = roundToTenth(overview.CalmScoreBase)
+	overview.CalmScorePausePenalty = roundToTenth(overview.CalmScorePausePenalty)
+	overview.CalmScoreInterruptionPenalty = roundToTenth(overview.CalmScoreInterruptionPenalty)
 
 	return overview, nil
 }

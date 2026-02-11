@@ -120,6 +120,16 @@ export interface AnalyticsOverview {
   completed_goals: number;
   calm_score: number;
   focus_stability: number;
+  calm_score_base: number;
+  calm_score_pause_penalty: number;
+  calm_score_interruption_penalty: number;
+  sessions_total: number;
+  completed_sessions: number;
+  paused_sessions: number;
+  other_sessions: number;
+  total_pauses: number;
+  total_interruptions: number;
+  primary_action: 'start_sessions' | 'complete_more_sessions' | 'reduce_pauses' | 'reduce_interruptions' | 'stabilize_schedule' | 'keep_momentum';
   best_hour_of_day_utc: number;
   total_nectar_earned: number;
 }

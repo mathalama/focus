@@ -6,8 +6,9 @@ export const StatCard: React.FC<{
   label: string;
   value: number;
   suffix?: string;
+  hint?: string;
   className?: string;
-}> = ({ icon: Icon, label, value, suffix, className }) => (
+}> = ({ icon: Icon, label, value, suffix, hint, className }) => (
   <Card className="flex flex-col items-start p-5 bg-surface border-border shadow-none transition-colors hover:bg-surfaceHighlight/50">
     <div className={`mb-3 flex h-8 w-8 items-center justify-center rounded bg-surfaceHighlight ${className}`}>
       <Icon size={16} className="text-primary" />
@@ -17,5 +18,6 @@ export const StatCard: React.FC<{
       <span className="text-2xl font-bold tracking-tight text-primary font-mono">{value}</span>
       {suffix && <span className="text-xs text-muted-foreground font-mono">{suffix}</span>}
     </div>
+    {hint && <p className="mt-2 text-[11px] leading-snug text-muted-foreground">{hint}</p>}
   </Card>
 );
