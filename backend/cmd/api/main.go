@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -32,6 +35,31 @@ func main() {
 		log.Fatalf("database error: %v", err)
 	}
 	defer pool.Close()
+
+	// Apply migrations automatically
+	migrationsDir := strings.TrimSpace(os.Getenv("MIGRATIONS_DIR"))
+	if migrationsDir == "" {
+		// Try to find migrations directory relative to executable
+		execPath, err := os.Executable()
+		if err == nil {
+			// Try /app/migrations (Docker) or ./migrations (local)
+			if _, err := os.Stat("/app/migrations"); err == nil {
+				migrationsDir = "/app/migrations"
+			} else if _, err := os.Stat(filepath.Join(filepath.Dir(execPath), "..", "..", "migrations")); err == nil {
+				migrationsDir = filepath.Join(filepath.Dir(execPath), "..", "..", "migrations")
+			} else {
+				migrationsDir = "migrations"
+			}
+		} else {
+			migrationsDir = "migrations"
+		}
+	}
+	log.Printf("applying migrations from: %s", migrationsDir)
+	if err := postgres.ApplyMigrations(ctx, pool, migrationsDir); err != nil {
+		log.Printf("warning: migration error: %v", err)
+	} else {
+		log.Println("migrations applied successfully")
+	}
 
 	repo := postgres.NewRepository(pool, cfg.MaxSessionPauses, cfg.MaxActiveAuthSessions, cfg.AuthSessionBindClient)
 	jwtSvc := jwt.NewService(cfg.JWTSecret)
