@@ -3,7 +3,8 @@ import { api } from '../api';
 import type { AnalyticsOverview, DailyActivity, DailyContribution } from '../types';
 import { Card } from '../components/ui/Card';
 import { StatCard } from '../components/analytics/StatCard';
-import { Target, Zap, Activity, Award } from 'lucide-react';
+import { StreakBadge, ComparisonCard, AchievementBadge, MotivationMessage } from '../components/analytics/AnalyticsWidgets';
+import { Target, Zap, Activity, Award, Rocket, Star, Gem, Crown, Flame, Lightbulb, Clock, Sparkles, BarChart3, Trophy } from 'lucide-react';
 import { addDays, differenceInCalendarDays, eachDayOfInterval, format, startOfWeek, subDays } from 'date-fns';
 import { getLocale, useI18n } from '../lib/i18n';
 
@@ -264,6 +265,53 @@ const AnalyticsContent: React.FC<{
   const totalPauses = overview?.total_pauses ?? 0;
   const totalInterruptions = overview?.total_interruptions ?? 0;
 
+  // Calculate current streak (consecutive days with sessions)
+  const currentStreak = useMemo(() => {
+    let streak = 0;
+    for (let i = 0; i < 365; i++) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateKey = format(date, 'yyyy-MM-dd');
+      const dayActivity = activityByDate.get(dateKey);
+      if (dayActivity && dayActivity.session_count > 0) {
+        streak++;
+      } else if (streak > 0) {
+        break;
+      }
+    }
+    return streak;
+  }, [activityByDate]);
+
+  // Calculate stats for this week vs last week
+  const weekComparison = useMemo(() => {
+    const thisWeekStart = startOfWeek(new Date());
+    const lastWeekStart = subDays(thisWeekStart, 7);
+    
+    let thisWeekSessions = 0;
+    let lastWeekSessions = 0;
+    
+    for (let i = 0; i < 7; i++) {
+      const thisDate = format(addDays(thisWeekStart, i), 'yyyy-MM-dd');
+      const lastDate = format(addDays(lastWeekStart, i), 'yyyy-MM-dd');
+      
+      thisWeekSessions += activityByDate.get(thisDate)?.session_count ?? 0;
+      lastWeekSessions += activityByDate.get(lastDate)?.session_count ?? 0;
+    }
+    
+    return { thisWeek: thisWeekSessions, lastWeek: lastWeekSessions };
+  }, [activityByDate]);
+
+  // Determine unlocked achievements
+  const achievements = useMemo(() => ({
+    starter: completedSessions >= 1,
+    focused: completedSessions >= 10,
+    dedicated: completedSessions >= 50,
+    legend: completedSessions >= 100,
+    weekStreak: currentStreak >= 7,
+    monthStreak: currentStreak >= 30,
+    totalHours: Math.floor(activity.reduce((sum, day) => sum + (day.total_minutes ?? 0), 0)) >= 60,
+  }), [completedSessions, currentStreak, activity]);
+
   return (
     <div className="relative space-y-8 font-sans">
       <header className="border-b border-border pb-4">
@@ -272,6 +320,20 @@ const AnalyticsContent: React.FC<{
           {t('analytics.subtitle')}
         </p>
       </header>
+
+      {/* Motivation Message */}
+      <MotivationMessage 
+        sessionsCompleted={completedSessions}
+        streak={currentStreak}
+        minutesTotal={Math.floor(activity.reduce((sum, day) => sum + (day.total_minutes ?? 0), 0))}
+      />
+
+      {/* Streak Section */}
+      {currentStreak > 0 && (
+        <div className="flex items-center justify-center">
+          <StreakBadge days={currentStreak} />
+        </div>
+      )}
 
       {/* Overview Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -310,6 +372,84 @@ const AnalyticsContent: React.FC<{
           hint={t('analytics.totalPointsHint')}
         />
       </div>
+
+      {/* Week Comparison */}
+      <Card className="bg-surface border-border shadow-none p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <BarChart3 size={16} className="text-accent" />
+          <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Сравнение с прошлой неделей</h2>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <ComparisonCard
+            current={weekComparison.thisWeek}
+            previous={weekComparison.lastWeek}
+            label="Сессии на эту неделю"
+          />
+          <ComparisonCard
+            current={Math.round(completedSessions / Math.max(1, weekComparison.thisWeek || 1))}
+            previous={Math.round(completedSessions / Math.max(1, weekComparison.lastWeek || 1))}
+            label="Среднее за неделю"
+          />
+        </div>
+      </Card>
+
+      {/* Achievements */}
+      <Card className="bg-surface border-border shadow-none p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <Trophy size={16} className="text-accent" />
+          <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Достижения</h2>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <AchievementBadge
+            icon={<Rocket size={32} />}
+            title="Стартер"
+            description="Первая сессия"
+            unlocked={achievements.starter}
+          />
+          <AchievementBadge
+            icon={<Star size={32} />}
+            title="Сфокусирован"
+            description="10 сессий"
+            unlocked={achievements.focused}
+          />
+          <AchievementBadge
+            icon={<Gem size={32} />}
+            title="Преданный"
+            description="50 сессий"
+            unlocked={achievements.dedicated}
+          />
+          <AchievementBadge
+            icon={<Crown size={32} />}
+            title="Легенда"
+            description="100 сессий"
+            unlocked={achievements.legend}
+          />
+          <AchievementBadge
+            icon={<Flame size={32} />}
+            title="Недельная полоса"
+            description="7 дней подряд"
+            unlocked={achievements.weekStreak}
+          />
+          <AchievementBadge
+            icon={<Lightbulb size={32} />}
+            title="Месячная полоса"
+            description="30 дней подряд"
+            unlocked={achievements.monthStreak}
+          />
+          <AchievementBadge
+            icon={<Clock size={32} />}
+            title="Час фокуса"
+            description="60+ минут"
+            unlocked={achievements.totalHours}
+          />
+          <AchievementBadge
+            icon={<Sparkles size={32} />}
+            title="Мастер"
+            description="Продолжай работать"
+            unlocked={false}
+          />
+        </div>
+      </Card>
 
       <Card className="bg-surface border-border shadow-none">
         <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('analytics.nextStep')}</h2>

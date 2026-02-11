@@ -4,6 +4,7 @@ import { goalsAPI } from './goals';
 import { analyticsAPI } from './analytics';
 import { gamificationAPI } from './gamification';
 import { adminAPI } from './admin';
+import { notifications } from './notifications';
 
 export const api = {
   auth: authAPI,
@@ -12,4 +13,5 @@ export const api = {
   analytics: analyticsAPI,
   gamification: gamificationAPI,
   admin: adminAPI,
+  notifications,
 };

@@ -482,3 +482,85 @@ func (r *Repository) ListSessionHistory(ctx context.Context, userID string, filt
 
 	return items, summary, nil
 }
+
+func (r *Repository) DeleteSession(ctx context.Context, userID, sessionID string) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Get the session to check if it was completed and get nectar amount
+	const getSessionQuery = `
+		SELECT status, recommended_minutes
+		FROM focus_sessions
+		WHERE id = $1 AND user_id = $2
+	`
+
+	var status string
+	var minutes int
+
+	if err := tx.QueryRow(ctx, getSessionQuery, sessionID, userID).Scan(&status, &minutes); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("get session: %w", err)
+	}
+
+	// Only allow deletion of non-active sessions
+	if status == "active" || status == "paused" {
+		return domain.ErrInvalidState
+	}
+
+	// If session was completed, deduct nectar from user
+	if status == "completed" && minutes > 0 {
+		if _, err := tx.Exec(ctx,
+			`UPDATE users SET nectar_balance = GREATEST(0, nectar_balance - $1) WHERE id = $2`,
+			minutes, userID,
+		); err != nil {
+			return fmt.Errorf("deduct nectar: %w", err)
+		}
+	}
+
+	// Delete interruptions associated with the session
+	if _, err := tx.Exec(ctx, `DELETE FROM interruptions WHERE session_id = $1`, sessionID); err != nil {
+		return fmt.Errorf("delete interruptions: %w", err)
+	}
+
+	// Delete reflections associated with the session
+	if _, err := tx.Exec(ctx, `DELETE FROM reflections WHERE session_id = $1`, sessionID); err != nil {
+		return fmt.Errorf("delete reflections: %w", err)
+	}
+
+	// Delete the session itself
+	const deleteSessionQuery = `DELETE FROM focus_sessions WHERE id = $1 AND user_id = $2`
+	if _, err := tx.Exec(ctx, deleteSessionQuery, sessionID, userID); err != nil {
+		return fmt.Errorf("delete session: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
+	}
+
+	return nil
+}
+
+func (r *Repository) DeleteReflection(ctx context.Context, userID, sessionID string) error {
+	// Verify session belongs to user
+	if err := r.pool.QueryRow(ctx,
+		`SELECT 1 FROM focus_sessions WHERE id = $1 AND user_id = $2`,
+		sessionID, userID,
+	).Scan(new(int)); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("check session ownership: %w", err)
+	}
+
+	const query = `DELETE FROM reflections WHERE session_id = $1`
+	if _, err := r.pool.Exec(ctx, query, sessionID); err != nil {
+		return fmt.Errorf("delete reflection: %w", err)
+	}
+
+	return nil
+}

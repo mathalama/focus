@@ -20,6 +20,8 @@ type queuedEmail struct {
 	ToEmail    string
 	ToName     string
 	VerifyLink string
+	ResetLink  string
+	EmailType  string
 	Attempts   int
 }
 
@@ -28,6 +30,7 @@ type OutboxService struct {
 	pool   *pgxpool.Pool
 	sender interface {
 		SendVerificationEmail(context.Context, string, string, string) error
+		SendPasswordResetEmail(context.Context, string, string, string) error
 	}
 	pollEvery   time.Duration
 	maxAttempts int
@@ -38,6 +41,7 @@ func NewOutboxService(
 	pool *pgxpool.Pool,
 	sender interface {
 		SendVerificationEmail(context.Context, string, string, string) error
+		SendPasswordResetEmail(context.Context, string, string, string) error
 	},
 	pollEvery time.Duration,
 	maxAttempts int,
@@ -58,12 +62,24 @@ func NewOutboxService(
 
 func (s *OutboxService) SendVerificationEmail(ctx context.Context, toEmail, toName, verifyLink string) error {
 	const query = `
-		INSERT INTO email_outbox (to_email, to_name, verify_link, status, next_attempt_at)
-		VALUES ($1, $2, $3, 'pending', NOW())
+		INSERT INTO email_outbox (to_email, to_name, verify_link, email_type, status, next_attempt_at)
+		VALUES ($1, $2, $3, 'verification', 'pending', NOW())
 	`
 	_, err := s.pool.Exec(ctx, query, strings.TrimSpace(toEmail), strings.TrimSpace(toName), strings.TrimSpace(verifyLink))
 	if err != nil {
 		return fmt.Errorf("enqueue verification email: %w", err)
+	}
+	return nil
+}
+
+func (s *OutboxService) SendPasswordResetEmail(ctx context.Context, toEmail, toName, resetLink string) error {
+	const query = `
+		INSERT INTO email_outbox (to_email, to_name, reset_link, email_type, status, next_attempt_at)
+		VALUES ($1, $2, $3, 'password_reset', 'pending', NOW())
+	`
+	_, err := s.pool.Exec(ctx, query, strings.TrimSpace(toEmail), strings.TrimSpace(toName), strings.TrimSpace(resetLink))
+	if err != nil {
+		return fmt.Errorf("enqueue password reset email: %w", err)
 	}
 	return nil
 }
@@ -107,7 +123,12 @@ func (s *OutboxService) processOne(ctx context.Context) (bool, error) {
 	}
 
 	sendCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	sendErr := s.sender.SendVerificationEmail(sendCtx, job.ToEmail, job.ToName, job.VerifyLink)
+	var sendErr error
+	if job.EmailType == "password_reset" {
+		sendErr = s.sender.SendPasswordResetEmail(sendCtx, job.ToEmail, job.ToName, job.ResetLink)
+	} else {
+		sendErr = s.sender.SendVerificationEmail(sendCtx, job.ToEmail, job.ToName, job.VerifyLink)
+	}
 	cancel()
 
 	if sendErr == nil {
@@ -133,7 +154,7 @@ func (s *OutboxService) processOne(ctx context.Context) (bool, error) {
 func (s *OutboxService) claimNext(ctx context.Context) (queuedEmail, error) {
 	const query = `
 		WITH candidate AS (
-			SELECT id, to_email, to_name, verify_link, attempts
+			SELECT id, to_email, to_name, verify_link, reset_link, email_type, attempts
 			FROM email_outbox
 			WHERE status IN ('pending', 'retry') AND next_attempt_at <= NOW()
 			ORDER BY created_at
@@ -146,11 +167,11 @@ func (s *OutboxService) claimNext(ctx context.Context) (queuedEmail, error) {
 		    updated_at = NOW()
 		FROM candidate
 		WHERE e.id = candidate.id
-		RETURNING e.id, candidate.to_email, candidate.to_name, candidate.verify_link, e.attempts
+		RETURNING e.id, candidate.to_email, candidate.to_name, candidate.verify_link, candidate.reset_link, candidate.email_type, e.attempts
 	`
 
 	var job queuedEmail
-	if err := s.pool.QueryRow(ctx, query).Scan(&job.ID, &job.ToEmail, &job.ToName, &job.VerifyLink, &job.Attempts); err != nil {
+	if err := s.pool.QueryRow(ctx, query).Scan(&job.ID, &job.ToEmail, &job.ToName, &job.VerifyLink, &job.ResetLink, &job.EmailType, &job.Attempts); err != nil {
 		return queuedEmail{}, err
 	}
 	return job, nil

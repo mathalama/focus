@@ -7,6 +7,8 @@ import { Play, Pause, CheckCircle, AlertOctagon, Coffee, BatteryCharging } from 
 import { motion } from 'framer-motion';
 import { addMinutes, differenceInSeconds, parseISO } from 'date-fns';
 import { useI18n } from '../lib/i18n';
+import { playSound } from '../lib/sounds';
+import { requestNotificationPermission, notifySessionComplete, notifyBreakEnd } from '../lib/notifications';
 
 export const SessionPage: React.FC = () => {
   const { t } = useI18n();
@@ -21,7 +23,10 @@ export const SessionPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [autoBreakStarted, setAutoBreakStarted] = useState(false);
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const completionHandledRef = useRef(false);
+  const breakCompletionHandledRef = useRef(false);
 
   // Keep ref in sync with state
   useEffect(() => { sessionRef.current = session; }, [session]);
@@ -80,6 +85,50 @@ export const SessionPage: React.FC = () => {
     return () => clearInterval(interval);
   }, [breakActive]);
 
+  // Handle session completion (play sound & notification)
+  useEffect(() => {
+    if (!session || session.status !== 'active' || timeLeft > 0) {
+      return;
+    }
+
+    if (!completionHandledRef.current) {
+      completionHandledRef.current = true;
+      const soundsEnabled = localStorage.getItem('sounds-enabled') !== 'false';
+      // Play success melody (playSound handles preferences and volume)
+      if (soundsEnabled) {
+        void playSound('session-complete');
+      }
+      // Show notification
+      notifySessionComplete();
+      
+      // Auto-start break (5 or 15 minutes depending on completed count)
+      if (!autoBreakStarted) {
+        setAutoBreakStarted(true);
+        const breakMinutes = completedCount > 0 && completedCount % 3 === 0 ? 15 : 5;
+        startBreak(breakMinutes);
+      }
+    }
+  }, [session, timeLeft, completedCount, autoBreakStarted]);
+
+  // Handle break completion (play sound & notification)
+  useEffect(() => {
+    if (breakTime > 0) {
+      breakCompletionHandledRef.current = false;
+      return;
+    }
+
+    if (breakActive && !breakCompletionHandledRef.current && breakDurationSeconds > 0) {
+      breakCompletionHandledRef.current = true;
+      const soundsEnabled = localStorage.getItem('sounds-enabled') !== 'false';
+      // Play break end sound
+      if (soundsEnabled) {
+        playSound('break-end', 0.6);
+      }
+      // Show break end notification
+      notifyBreakEnd();
+    }
+  }, [breakTime, breakActive, breakDurationSeconds]);
+
   const fetchCompletedCount = useCallback(async () => {
     try {
       const history = await api.sessions.history({
@@ -109,6 +158,7 @@ export const SessionPage: React.FC = () => {
       if (nextSession.status === 'active') {
         setBreakTime(0);
         setBreakDurationSeconds(0);
+        setAutoBreakStarted(false);
       }
 
       if (nextSession.status === 'completed') {
@@ -145,6 +195,14 @@ export const SessionPage: React.FC = () => {
   useEffect(() => {
     void fetchCompletedCount();
   }, [fetchCompletedCount]);
+
+  // Request notification permission on mount
+  useEffect(() => {
+    const requestPermissions = async () => {
+      await requestNotificationPermission();
+    };
+    requestPermissions();
+  }, []);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -369,8 +427,43 @@ export const SessionPage: React.FC = () => {
                </Button>
              </div>
            )}
+
+           {/* Auto Break Started - Options to continue or finish */}
+           {isBreak && autoBreakStarted && (
+             <div className="mt-6 animate-in fade-in slide-in-from-bottom-4 flex flex-col gap-3 w-full max-w-sm">
+               <p className="text-xs text-muted-foreground font-mono text-center mb-2">{t('session.breakActive')}</p>
+               <Button 
+                 variant="primary" 
+                 size="sm"
+                 onClick={() => startBreak(breakDurationSeconds / 60)}
+                 className="w-full font-mono text-xs gap-2"
+               >
+                 <BatteryCharging size={14} />
+                 {t('session.continueBreak')}
+               </Button>
+               <Button 
+                 variant="outline" 
+                 size="sm"
+                 onClick={() => handleAction('resume')}
+                 disabled={actionLoading}
+                 className="w-full font-mono text-xs gap-2"
+               >
+                 <Play size={14} />
+                 {t('session.startNewSession')}
+               </Button>
+               <Button 
+                 variant="ghost" 
+                 size="sm"
+                 onClick={() => handleAction('complete')}
+                 disabled={actionLoading}
+                 className="w-full font-mono text-xs text-muted-foreground"
+               >
+                 {t('session.finishForToday')}
+               </Button>
+             </div>
+           )}
            
-           {isBreak && (
+           {isBreak && !autoBreakStarted && (
              <div className="mt-2 animate-in fade-in">
                <p className="text-xs text-muted-foreground font-mono mb-2">{t('session.breakActive')}</p>
              </div>

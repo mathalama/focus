@@ -15,8 +15,11 @@ type UserRepository interface {
 	DevLogin(ctx context.Context, email, name string) (domain.User, error)
 	RegisterUser(ctx context.Context, email, name, passwordHash string) (domain.User, error)
 	GetAuthUserByEmail(ctx context.Context, email string) (domain.AuthUser, error)
+	GetUserByEmail(ctx context.Context, email string) (domain.User, error)
 	CreateEmailVerificationToken(ctx context.Context, userID string, ttl time.Duration) (string, time.Time, error)
 	VerifyEmailByToken(ctx context.Context, rawToken string) (domain.User, error)
+	CreatePasswordResetToken(ctx context.Context, userID string, ttl time.Duration) (string, time.Time, error)
+	ResetPasswordByToken(ctx context.Context, rawToken, passwordHash string) (domain.User, error)
 	CreateRefreshSession(ctx context.Context, userID, tokenHash, userAgent, ipAddress string, ttl time.Duration) (domain.AuthSession, error)
 	RotateRefreshSession(ctx context.Context, currentTokenHash, newTokenHash, userAgent, ipAddress string, ttl time.Duration) (domain.AuthSession, error)
 	RevokeRefreshSessionByTokenHash(ctx context.Context, tokenHash string) error
@@ -29,6 +32,9 @@ type GoalRepository interface {
 	CreateGoal(ctx context.Context, userID string, input CreateGoalInput) (domain.Goal, error)
 	ListGoals(ctx context.Context, userID string) ([]domain.Goal, error)
 	ListGoalHistory(ctx context.Context, userID string) ([]domain.Goal, error)
+	GetGoal(ctx context.Context, userID, goalID string) (domain.Goal, error)
+	UpdateGoal(ctx context.Context, userID, goalID string, input UpdateGoalInput) (domain.Goal, error)
+	DeleteGoal(ctx context.Context, userID, goalID string) error
 }
 
 // SessionRepository handles focus-session persistence.
@@ -45,6 +51,8 @@ type SessionRepository interface {
 	AddInterruption(ctx context.Context, userID, sessionID, reason string) (domain.Interruption, error)
 	UpsertReflection(ctx context.Context, userID, sessionID string, input ReflectionInput) (domain.Reflection, error)
 	GetRecentReflections(ctx context.Context, userID string, limit int) ([]domain.Reflection, error)
+	DeleteSession(ctx context.Context, userID, sessionID string) error
+	DeleteReflection(ctx context.Context, userID, sessionID string) error
 }
 
 // AnalyticsRepository handles analytics queries.
@@ -71,6 +79,12 @@ type TelegramRepository interface {
 	UnlinkTelegram(ctx context.Context, userID string) error
 }
 
+// NotificationRepository handles notification sound preferences.
+type NotificationRepository interface {
+	GetNotificationSound(ctx context.Context, userID string) (domain.NotificationSound, error)
+	UpdateNotificationSound(ctx context.Context, userID string, sound domain.NotificationSound) (domain.NotificationSound, error)
+}
+
 // ---------- service ports ----------
 
 // TokenService generates and validates JWT tokens.
@@ -82,4 +96,5 @@ type TokenService interface {
 // EmailService sends transactional emails.
 type EmailService interface {
 	SendVerificationEmail(ctx context.Context, toEmail, toName, verifyLink string) error
+	SendPasswordResetEmail(ctx context.Context, toEmail, toName, resetLink string) error
 }

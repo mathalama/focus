@@ -13,6 +13,13 @@ type CreateGoalInput struct {
 	Tags               []string
 }
 
+type UpdateGoalInput struct {
+	Topic              string
+	DesiredResult      string
+	RecommendedMinutes int
+	Tags               []string
+}
+
 type StartSessionInput struct {
 	GoalID             string
 	RecommendedMinutes int
@@ -53,6 +60,11 @@ type ResendOutput struct {
 	Resent          bool
 	AlreadyVerified bool
 	ExpiresAt       time.Time
+}
+
+type ForgotPasswordOutput struct {
+	ResetEmailSent bool
+	ExpiresAt      time.Time
 }
 
 type AuthTokens struct {

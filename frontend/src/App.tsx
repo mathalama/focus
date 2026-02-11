@@ -7,6 +7,8 @@ import { useI18n } from './lib/i18n';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Layout } from './components/Layout';
 import { LoginPage } from './pages/LoginPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { SessionPage } from './pages/SessionPage';
 import { ReflectionPage } from './pages/ReflectionPage';
@@ -15,6 +17,7 @@ import { AnalyticsPage } from './pages/AnalyticsPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { HistoryPage } from './pages/HistoryPage';
 import { AdminPage } from './pages/AdminPage';
+import { GoalEditPage } from './pages/GoalEditPage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, authChecked } = useAuth();
@@ -50,6 +53,8 @@ function App() {
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
               
               <Route path="/" element={
                 <ProtectedRoute>
@@ -62,6 +67,7 @@ function App() {
                 <Route path="history" element={<HistoryPage />} />
                 <Route path="profile" element={<ProfilePage />} />
                 <Route path="admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
+                <Route path="goal/:goalId/edit" element={<GoalEditPage />} />
                 <Route path="session/:sessionId" element={<SessionPage />} />
                 <Route path="session/:sessionId/reflection" element={<ReflectionPage />} />
               </Route>

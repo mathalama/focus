@@ -57,3 +57,11 @@ func (uc *SessionUseCase) AddInterruption(ctx context.Context, userID, sessionID
 func (uc *SessionUseCase) UpsertReflection(ctx context.Context, userID, sessionID string, input ReflectionInput) (domain.Reflection, error) {
 	return uc.sessionRepo.UpsertReflection(ctx, userID, sessionID, input)
 }
+
+func (uc *SessionUseCase) DeleteSession(ctx context.Context, userID, sessionID string) error {
+	return uc.sessionRepo.DeleteSession(ctx, userID, sessionID)
+}
+
+func (uc *SessionUseCase) DeleteReflection(ctx context.Context, userID, sessionID string) error {
+	return uc.sessionRepo.DeleteReflection(ctx, userID, sessionID)
+}

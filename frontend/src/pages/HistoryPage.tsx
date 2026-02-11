@@ -5,6 +5,7 @@ import { Button } from '../components/ui/Button';
 import { api } from '../api';
 import type { SessionHistoryEntry, SessionHistorySummary } from '../types';
 import { MetricCard } from '../components/history/MetricCard';
+import { SessionDetailModal } from '../components/history/SessionDetailModal';
 import { getLocale, useI18n } from '../lib/i18n';
 import { Clock3, Filter, ListChecks, Sigma } from 'lucide-react';
 
@@ -27,6 +28,8 @@ export const HistoryPage: React.FC = () => {
     total_minutes: 0,
     average_minutes: 0,
   });
+  const [selectedSession, setSelectedSession] = useState<SessionHistoryEntry | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
 
   const filters = useMemo(() => {
     const tags = tagsInput
@@ -171,7 +174,14 @@ export const HistoryPage: React.FC = () => {
         ) : (
           <div className="grid gap-2">
             {entries.map((entry) => (
-              <div key={entry.session_id} className="rounded-lg border border-border bg-background/60 px-3 py-3">
+              <button
+                key={entry.session_id}
+                onClick={() => {
+                  setSelectedSession(entry);
+                  setModalOpen(true);
+                }}
+                className="rounded-lg border border-border bg-background/60 px-3 py-3 text-left hover:border-accent/50 hover:bg-background/80 transition-colors"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-xs font-mono font-bold uppercase tracking-wide text-primary">{entry.topic}</p>
@@ -198,11 +208,20 @@ export const HistoryPage: React.FC = () => {
                     </span>
                   ))}
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         )}
       </Card>
+
+      {selectedSession && (
+        <SessionDetailModal
+          session={selectedSession}
+          isOpen={modalOpen}
+          onClose={() => setModalOpen(false)}
+          onUpdate={fetchHistory}
+        />
+      )}
     </div>
   );
 };

@@ -13,6 +13,7 @@ var (
 	ErrEmailTokenInvalid     = errors.New("email verification token invalid or expired")
 	ErrInvalidEmail          = errors.New("invalid email address")
 	ErrWeakPassword          = errors.New("password must be between 8 and 72 characters")
+	ErrInvalidToken          = errors.New("invalid or expired token")
 	ErrEmailNotVerified      = errors.New("email is not verified")
 	ErrInvalidCredentials    = errors.New("invalid email or password")
 	ErrEmailNotConfigured    = errors.New("email verification is not configured")

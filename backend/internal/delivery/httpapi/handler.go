@@ -35,6 +35,7 @@ type Handler struct {
 	analytics            *usecase.AnalyticsUseCase
 	shop                 *usecase.ShopUseCase
 	telegram             *usecase.TelegramUseCase
+	notification         *usecase.NotificationUseCase
 	dbKeepAlive          DBKeepAlive
 	emailDeliveries      EmailDeliveryReader
 	eventTracker         EventTracker
@@ -49,6 +50,7 @@ func NewHandler(
 	analytics *usecase.AnalyticsUseCase,
 	shop *usecase.ShopUseCase,
 	telegram *usecase.TelegramUseCase,
+	notification *usecase.NotificationUseCase,
 	dbKeepAlive DBKeepAlive,
 	emailDeliveries EmailDeliveryReader,
 	eventTracker EventTracker,
@@ -61,6 +63,7 @@ func NewHandler(
 		analytics:            analytics,
 		shop:                 shop,
 		telegram:             telegram,
+		notification:         notification,
 		dbKeepAlive:          dbKeepAlive,
 		emailDeliveries:      emailDeliveries,
 		eventTracker:         eventTracker,

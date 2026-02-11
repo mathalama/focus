@@ -79,6 +79,26 @@ export const authAPI = {
     return res.json();
   },
 
+  forgotPassword: async (email: string) => {
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) throw new Error(await readAPIError(res, 'Failed to send password reset email'));
+    return res.json();
+  },
+
+  resetPassword: async (token: string, newPassword: string) => {
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, new_password: newPassword }),
+    });
+    if (!res.ok) throw new Error(await readAPIError(res, 'Failed to reset password'));
+    return res.json();
+  },
+
   getMe: async () => {
     const res = await fetch(`${API_BASE_URL}/api/v1/me`, {
       headers: getAuthHeaders(),

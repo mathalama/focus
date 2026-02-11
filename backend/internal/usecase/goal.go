@@ -26,3 +26,15 @@ func (uc *GoalUseCase) List(ctx context.Context, userID string) ([]domain.Goal, 
 func (uc *GoalUseCase) ListHistory(ctx context.Context, userID string) ([]domain.Goal, error) {
 	return uc.goalRepo.ListGoalHistory(ctx, userID)
 }
+
+func (uc *GoalUseCase) Get(ctx context.Context, userID, goalID string) (domain.Goal, error) {
+	return uc.goalRepo.GetGoal(ctx, userID, goalID)
+}
+
+func (uc *GoalUseCase) Update(ctx context.Context, userID, goalID string, input UpdateGoalInput) (domain.Goal, error) {
+	return uc.goalRepo.UpdateGoal(ctx, userID, goalID, input)
+}
+
+func (uc *GoalUseCase) Delete(ctx context.Context, userID, goalID string) error {
+	return uc.goalRepo.DeleteGoal(ctx, userID, goalID)
+}

@@ -291,3 +291,54 @@ func (h *Handler) UpsertReflection(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, gin.H{"reflection": reflection})
 }
+
+func (h *Handler) DeleteSession(c *gin.Context) {
+	userID := getUserID(c)
+	sessionID := strings.TrimSpace(c.Param("sessionID"))
+
+	if sessionID == "" {
+		respondError(c, http.StatusBadRequest, "session id is required")
+		return
+	}
+
+	err := h.session.DeleteSession(c.Request.Context(), userID, sessionID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			respondError(c, http.StatusNotFound, "session not found")
+			return
+		}
+		if errors.Is(err, domain.ErrInvalidState) {
+			respondError(c, http.StatusBadRequest, "cannot delete active or paused sessions")
+			return
+		}
+		respondError(c, http.StatusInternalServerError, "failed to delete session")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"deleted": true})
+	h.trackEvent(c.Request.Context(), userID, "session.deleted", map[string]any{
+		"session_id": sessionID,
+	})
+}
+
+func (h *Handler) DeleteReflection(c *gin.Context) {
+	userID := getUserID(c)
+	sessionID := strings.TrimSpace(c.Param("sessionID"))
+
+	if sessionID == "" {
+		respondError(c, http.StatusBadRequest, "session id is required")
+		return
+	}
+
+	err := h.session.DeleteReflection(c.Request.Context(), userID, sessionID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			respondError(c, http.StatusNotFound, "session not found")
+			return
+		}
+		respondError(c, http.StatusInternalServerError, "failed to delete reflection")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"deleted": true})
+}

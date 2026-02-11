@@ -56,6 +56,7 @@ func main() {
 		time.Duration(cfg.EmailVerificationTTLMin)*time.Minute,
 		time.Duration(cfg.RefreshSessionTTLHours)*time.Hour,
 		cfg.EmailVerifyURLBase,
+		cfg.EmailResetPasswordURLBase,
 		cfg.EmailVerifySuccessRedirect,
 		cfg.EmailVerifyFailRedirect,
 	)
@@ -64,9 +65,10 @@ func main() {
 	analyticsUC := usecase.NewAnalyticsUseCase(repo, repo)
 	shopUC := usecase.NewShopUseCase(repo)
 	telegramUC := usecase.NewTelegramUseCase(repo, time.Duration(cfg.TelegramLinkCodeTTLMinutes)*time.Minute)
+	notificationUC := usecase.NewNotificationUseCase(repo)
 
 	// Delivery
-	handler := httpapi.NewHandler(authUC, sessionUC, goalUC, analyticsUC, shopUC, telegramUC, repo, emailOutbox, repo, cfg.TelegramBotAuthToken)
+	handler := httpapi.NewHandler(authUC, sessionUC, goalUC, analyticsUC, shopUC, telegramUC, notificationUC, repo, emailOutbox, repo, cfg.TelegramBotAuthToken)
 	router := httpapi.NewRouter(handler, cfg.CorsOrigin, cfg.EnableDevLogin, jwtSvc.ValidateToken)
 
 	srv := &http.Server{

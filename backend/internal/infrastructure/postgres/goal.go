@@ -8,6 +8,7 @@ import (
 	"mathalama-focus/backend/internal/domain"
 	"mathalama-focus/backend/internal/usecase"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -107,4 +108,77 @@ func (r *Repository) ListGoalHistory(ctx context.Context, userID string) ([]doma
 	}
 
 	return goals, nil
+}
+
+func (r *Repository) GetGoal(ctx context.Context, userID, goalID string) (domain.Goal, error) {
+	const query = `
+		SELECT id, user_id, topic, desired_result, recommended_minutes, tags, completed_at, created_at
+		FROM goals
+		WHERE id = $1 AND user_id = $2
+	`
+
+	var goal domain.Goal
+	if err := r.pool.QueryRow(ctx, query, goalID, userID).Scan(
+		&goal.ID, &goal.UserID, &goal.Topic, &goal.DesiredResult,
+		&goal.RecommendedMinutes, &goal.Tags, &goal.CompletedAt, &goal.CreatedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Goal{}, domain.ErrNotFound
+		}
+		return domain.Goal{}, fmt.Errorf("get goal: %w", err)
+	}
+
+	return goal, nil
+}
+
+func (r *Repository) UpdateGoal(ctx context.Context, userID, goalID string, input usecase.UpdateGoalInput) (domain.Goal, error) {
+	const query = `
+		UPDATE goals
+		SET topic = $1,
+		    desired_result = $2,
+		    recommended_minutes = $3,
+		    tags = $4
+		WHERE id = $5 AND user_id = $6 AND completed_at IS NULL
+		RETURNING id, user_id, topic, desired_result, recommended_minutes, tags, completed_at, created_at
+	`
+
+	minutes := input.RecommendedMinutes
+	if minutes == 0 {
+		minutes = 25
+	}
+	tags := input.Tags
+	if tags == nil {
+		tags = []string{}
+	}
+
+	var goal domain.Goal
+	if err := r.pool.QueryRow(ctx, query, input.Topic, input.DesiredResult, minutes, tags, goalID, userID).Scan(
+		&goal.ID, &goal.UserID, &goal.Topic, &goal.DesiredResult,
+		&goal.RecommendedMinutes, &goal.Tags, &goal.CompletedAt, &goal.CreatedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Goal{}, domain.ErrNotFound
+		}
+		return domain.Goal{}, fmt.Errorf("update goal: %w", err)
+	}
+
+	return goal, nil
+}
+
+func (r *Repository) DeleteGoal(ctx context.Context, userID, goalID string) error {
+	const query = `
+		DELETE FROM goals
+		WHERE id = $1 AND user_id = $2 AND completed_at IS NULL
+	`
+
+	tag, err := r.pool.Exec(ctx, query, goalID, userID)
+	if err != nil {
+		return fmt.Errorf("delete goal: %w", err)
+	}
+
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+
+	return nil
 }

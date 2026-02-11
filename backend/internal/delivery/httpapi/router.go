@@ -38,6 +38,8 @@ func NewRouter(handler *Handler, corsOrigin string, enableDevLogin bool, validat
 	router.POST("/api/v1/auth/logout", authLimiter, handler.Logout)
 	router.POST("/api/v1/auth/verify-email/resend", authLimiter, handler.ResendVerificationEmail)
 	router.GET("/api/v1/auth/verify-email", handler.VerifyEmail)
+	router.POST("/api/v1/auth/forgot-password", authLimiter, handler.ForgotPassword)
+	router.POST("/api/v1/auth/reset-password", authLimiter, handler.ResetPassword)
 
 	// Bot-to-bot routes (authenticated via X-Telegram-Bot-Auth header)
 	router.POST("/api/v1/integrations/telegram/link", botLimiter, telegramIdempotency, handler.TelegramLinkByCode)
@@ -58,6 +60,9 @@ func NewRouter(handler *Handler, corsOrigin string, enableDevLogin bool, validat
 		api.POST("/goals", handler.CreateGoal)
 		api.GET("/goals", handler.ListGoals)
 		api.GET("/goals/history", handler.ListGoalHistory)
+		api.GET("/goals/:goalId", handler.GetGoal)
+		api.PATCH("/goals/:goalId", handler.UpdateGoal)
+		api.DELETE("/goals/:goalId", handler.DeleteGoal)
 
 		api.POST("/sessions", handler.StartSession)
 		api.GET("/sessions/active", handler.GetActiveSession)
@@ -70,11 +75,16 @@ func NewRouter(handler *Handler, corsOrigin string, enableDevLogin bool, validat
 		api.POST("/sessions/:sessionID/interruption", handler.AddInterruption)
 		api.PATCH("/sessions/:sessionID/complete", userIdempotency, handler.CompleteSession)
 		api.POST("/sessions/:sessionID/reflection", handler.UpsertReflection)
+		api.DELETE("/sessions/:sessionID", handler.DeleteSession)
+		api.DELETE("/sessions/:sessionID/reflection", handler.DeleteReflection)
 
 		api.GET("/analytics/overview", handler.AnalyticsOverview)
 		api.GET("/analytics/activity", handler.GetDailyActivity)
 		api.GET("/analytics/activity/day", handler.GetDailyContributions)
 		api.GET("/analytics/insights", handler.GetInsights)
+
+		api.GET("/notifications/sounds", handler.GetNotificationSounds)
+		api.PATCH("/notifications/sounds", handler.UpdateNotificationSounds)
 
 		api.GET("/leaderboard", handler.GetLeaderboard)
 

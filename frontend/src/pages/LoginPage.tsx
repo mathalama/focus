@@ -192,6 +192,18 @@ export const LoginPage: React.FC = () => {
             </Button>
           ) : null}
 
+          {mode === 'login' ? (
+            <div className="text-center text-xs text-muted-foreground">
+              <button
+                type="button"
+                onClick={() => navigate('/forgot-password')}
+                className="font-mono underline hover:text-primary transition-colors"
+              >
+                Forgot password?
+              </button>
+            </div>
+          ) : null}
+
           <Button 
             type="submit" 
             className="w-full justify-between bg-accent text-accent-foreground hover:bg-accent/90 mt-2" 

@@ -30,6 +30,7 @@ type Config struct {
 	EmailVerifySuccessRedirect string
 	EmailVerifyFailRedirect    string
 	EmailVerificationTTLMin    int
+	EmailResetPasswordURLBase  string
 }
 
 var postgresURLPattern = regexp.MustCompile(`(?i)postgres(?:ql)?://[^\s'"]+`)
@@ -57,6 +58,7 @@ func Load() (Config, error) {
 		EmailVerifySuccessRedirect: strings.TrimSpace(envOrDefault("EMAIL_VERIFY_SUCCESS_REDIRECT", "http://localhost:5173/login?verified=1")),
 		EmailVerifyFailRedirect:    strings.TrimSpace(envOrDefault("EMAIL_VERIFY_FAIL_REDIRECT", "http://localhost:5173/login?verified=0")),
 		EmailVerificationTTLMin:    intOrDefault("EMAIL_VERIFICATION_TTL_MINUTES", 60),
+		EmailResetPasswordURLBase:  strings.TrimSpace(envOrDefault("EMAIL_RESET_PASSWORD_URL_BASE", "http://localhost:5173/reset-password")),
 	}
 
 	if cfg.TelegramLinkCodeTTLMinutes <= 0 {

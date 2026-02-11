@@ -180,6 +180,18 @@ type Insight struct {
 	Type    string `json:"type"` // 'tip', 'warning', 'encouragement'
 }
 
+type NotificationSound struct {
+	ID                   string    `json:"id"`
+	UserID               string    `json:"user_id"`
+	SessionCompleteSound string    `json:"session_complete_sound"`
+	BreakEndSound        string    `json:"break_end_sound"`
+	NotificationSound    string    `json:"notification_sound"`
+	Volume               float64   `json:"volume"`
+	SoundsEnabled        bool      `json:"sounds_enabled"`
+	CreatedAt            time.Time `json:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at"`
+}
+
 type AuthUser struct {
 	User            User       `json:"-"`
 	PasswordHash    string     `json:"-"`

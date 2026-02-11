@@ -124,4 +124,22 @@ export const sessionsAPI = {
     if (!res.ok) throw new Error('Failed to submit reflection');
     return res.json();
   },
+
+  delete: async (sessionID: string) => {
+    const res = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionID}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error('Failed to delete session');
+    return res.json();
+  },
+
+  deleteReflection: async (sessionID: string) => {
+    const res = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionID}/reflection`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error('Failed to delete reflection');
+    return res.json();
+  },
 };

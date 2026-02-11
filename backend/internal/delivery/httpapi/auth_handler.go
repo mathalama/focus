@@ -358,6 +358,78 @@ func (h *Handler) renderVerifyResult(c *gin.Context, success bool, errorMessage 
 	c.JSON(http.StatusBadRequest, gin.H{"verified": false, "error": errorMessage})
 }
 
+func (h *Handler) ForgotPassword(c *gin.Context) {
+	var req struct {
+		Email string `json:"email"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if strings.TrimSpace(req.Email) == "" {
+		respondError(c, http.StatusBadRequest, "email is required")
+		return
+	}
+
+	result, err := h.auth.ForgotPassword(c.Request.Context(), req.Email)
+	if err != nil {
+		log.Printf("forgot password error: %v", err)
+		// Always return success to prevent email enumeration attacks
+		c.JSON(http.StatusOK, gin.H{
+			"reset_email_sent": false,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"reset_email_sent": result.ResetEmailSent,
+		"expires_at":       result.ExpiresAt,
+	})
+}
+
+func (h *Handler) ResetPassword(c *gin.Context) {
+	var req struct {
+		Token       string `json:"token"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	token := strings.TrimSpace(req.Token)
+	password := strings.TrimSpace(req.NewPassword)
+
+	if token == "" {
+		respondError(c, http.StatusBadRequest, "reset token is required")
+		return
+	}
+	if password == "" {
+		respondError(c, http.StatusBadRequest, "new password is required")
+		return
+	}
+
+	user, err := h.auth.ResetPassword(c.Request.Context(), token, password)
+	if err != nil {
+		if errors.Is(err, domain.ErrInvalidToken) {
+			respondError(c, http.StatusBadRequest, "invalid or expired reset token")
+			return
+		}
+		if errors.Is(err, domain.ErrWeakPassword) {
+			respondError(c, http.StatusBadRequest, "password must be between 8 and 72 characters")
+			return
+		}
+		log.Printf("reset password error: %v", err)
+		respondError(c, http.StatusInternalServerError, "failed to reset password")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"user": user,
+	})
+}
+
 func emailDomain(email string) string {
 	email = strings.TrimSpace(email)
 	idx := strings.LastIndex(email, "@")

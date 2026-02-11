@@ -101,15 +101,23 @@ export const GoalForm: React.FC = () => {
            </div>
            <div className="space-y-1.5">
              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{t('goalForm.duration')}</label>
-             <Input 
-               type="number"
-               min={5}
-               max={180}
-               value={minutes}
-               onChange={e => setMinutes(parseInt(e.target.value, 10) || 25)}
-               className="font-mono text-xs bg-background border-border"
-               required
-             />
+             <div className="flex items-center gap-2">
+               <Input 
+                 type="number"
+                 min={1}
+                 max={480}
+                 value={minutes}
+                 onChange={e => {
+                   const value = parseInt(e.target.value, 10);
+                   if (!isNaN(value) && value >= 1) {
+                     setMinutes(Math.min(value, 480));
+                   }
+                 }}
+                 className="font-mono text-xs bg-background border-border"
+                 required
+               />
+               <span className="text-xs text-muted-foreground font-mono whitespace-nowrap">min</span>
+             </div>
            </div>
          </div>
 
