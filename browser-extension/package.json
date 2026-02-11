@@ -1,0 +1,16 @@
+{
+  "name": "mathalama-focus-extension",
+  "version": "1.0.0",
+  "description": "Browser extension for Mathalama Focus Mode",
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/**/*.ts --bundle --outdir=dist --platform=browser --external:chrome",
+    "dev": "esbuild src/**/*.ts --bundle --outdir=dist --platform=browser --external:chrome --watch",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.246",
+    "esbuild": "^0.19.9",
+    "typescript": "^5.3.3"
+  }
+}

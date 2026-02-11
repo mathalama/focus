@@ -36,6 +36,7 @@ type Handler struct {
 	shop                 *usecase.ShopUseCase
 	telegram             *usecase.TelegramUseCase
 	notification         *usecase.NotificationUseCase
+	preferences          *usecase.PreferencesUseCase
 	dbKeepAlive          DBKeepAlive
 	emailDeliveries      EmailDeliveryReader
 	eventTracker         EventTracker
@@ -51,6 +52,7 @@ func NewHandler(
 	shop *usecase.ShopUseCase,
 	telegram *usecase.TelegramUseCase,
 	notification *usecase.NotificationUseCase,
+	preferences *usecase.PreferencesUseCase,
 	dbKeepAlive DBKeepAlive,
 	emailDeliveries EmailDeliveryReader,
 	eventTracker EventTracker,
@@ -64,6 +66,7 @@ func NewHandler(
 		shop:                 shop,
 		telegram:             telegram,
 		notification:         notification,
+		preferences:          preferences,
 		dbKeepAlive:          dbKeepAlive,
 		emailDeliveries:      emailDeliveries,
 		eventTracker:         eventTracker,
@@ -133,6 +136,103 @@ func (h *Handler) sessionAction(c *gin.Context, action func(userID, sessionID st
 	}
 
 	c.JSON(http.StatusOK, gin.H{"session": payload})
+}
+
+// ---------- preferences handlers ----------
+
+func (h *Handler) GetSessionPreferences(c *gin.Context) {
+	userID := c.GetString("user_id")
+
+	prefs, err := h.preferences.GetSessionPreferences(c.Request.Context(), userID)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to get preferences")
+		return
+	}
+
+	c.JSON(http.StatusOK, prefs)
+}
+
+func (h *Handler) UpdateSessionPreferences(c *gin.Context) {
+	userID := c.GetString("user_id")
+
+	var prefs domain.UserSessionPreferences
+	if err := c.BindJSON(&prefs); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid request")
+		return
+	}
+
+	updated, err := h.preferences.UpdateSessionPreferences(c.Request.Context(), userID, prefs)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to update preferences")
+		return
+	}
+
+	c.JSON(http.StatusOK, updated)
+}
+
+func (h *Handler) ListNotificationSchedules(c *gin.Context) {
+	userID := c.GetString("user_id")
+
+	schedules, err := h.preferences.GetNotificationSchedules(c.Request.Context(), userID)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to list schedules")
+		return
+	}
+
+	if schedules == nil {
+		schedules = []domain.NotificationSchedule{}
+	}
+
+	c.JSON(http.StatusOK, schedules)
+}
+
+func (h *Handler) CreateNotificationSchedule(c *gin.Context) {
+	userID := c.GetString("user_id")
+
+	var schedule domain.NotificationSchedule
+	if err := c.BindJSON(&schedule); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid request")
+		return
+	}
+
+	created, err := h.preferences.CreateNotificationSchedule(c.Request.Context(), userID, schedule)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to create schedule")
+		return
+	}
+
+	c.JSON(http.StatusCreated, created)
+}
+
+func (h *Handler) UpdateNotificationSchedule(c *gin.Context) {
+	userID := c.GetString("user_id")
+	scheduleID := c.Param("id")
+
+	var schedule domain.NotificationSchedule
+	if err := c.BindJSON(&schedule); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid request")
+		return
+	}
+
+	updated, err := h.preferences.UpdateNotificationSchedule(c.Request.Context(), userID, scheduleID, schedule)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to update schedule")
+		return
+	}
+
+	c.JSON(http.StatusOK, updated)
+}
+
+func (h *Handler) DeleteNotificationSchedule(c *gin.Context) {
+	userID := c.GetString("user_id")
+	scheduleID := c.Param("id")
+
+	if err := h.preferences.DeleteNotificationSchedule(c.Request.Context(), userID, scheduleID); err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to delete schedule")
+		return
+	}
+
+	c.JSON(http.StatusNoContent, nil)
 }
 
 func (h *Handler) trackEvent(ctx context.Context, userID, eventName string, properties map[string]any) {

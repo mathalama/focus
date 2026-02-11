@@ -94,9 +94,10 @@ func main() {
 	shopUC := usecase.NewShopUseCase(repo)
 	telegramUC := usecase.NewTelegramUseCase(repo, time.Duration(cfg.TelegramLinkCodeTTLMinutes)*time.Minute)
 	notificationUC := usecase.NewNotificationUseCase(repo)
+	preferencesUC := usecase.NewPreferencesUseCase(repo, repo)
 
 	// Delivery
-	handler := httpapi.NewHandler(authUC, sessionUC, goalUC, analyticsUC, shopUC, telegramUC, notificationUC, repo, emailOutbox, repo, cfg.TelegramBotAuthToken)
+	handler := httpapi.NewHandler(authUC, sessionUC, goalUC, analyticsUC, shopUC, telegramUC, notificationUC, preferencesUC, repo, emailOutbox, repo, cfg.TelegramBotAuthToken)
 	router := httpapi.NewRouter(handler, cfg.CorsOrigin, cfg.EnableDevLogin, jwtSvc.ValidateToken)
 
 	srv := &http.Server{

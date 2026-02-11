@@ -85,6 +85,22 @@ type NotificationRepository interface {
 	UpdateNotificationSound(ctx context.Context, userID string, sound domain.NotificationSound) (domain.NotificationSound, error)
 }
 
+// SessionPreferencesRepository handles user session customization.
+type SessionPreferencesRepository interface {
+	GetSessionPreferences(ctx context.Context, userID string) (domain.UserSessionPreferences, error)
+	UpdateSessionPreferences(ctx context.Context, userID string, prefs domain.UserSessionPreferences) (domain.UserSessionPreferences, error)
+}
+
+// NotificationScheduleRepository handles notification reminders.
+type NotificationScheduleRepository interface {
+	GetNotificationSchedules(ctx context.Context, userID string) ([]domain.NotificationSchedule, error)
+	CreateNotificationSchedule(ctx context.Context, userID string, schedule domain.NotificationSchedule) (domain.NotificationSchedule, error)
+	UpdateNotificationSchedule(ctx context.Context, userID, scheduleID string, schedule domain.NotificationSchedule) (domain.NotificationSchedule, error)
+	DeleteNotificationSchedule(ctx context.Context, userID, scheduleID string) error
+	GetSchedulesReadyToSend(ctx context.Context) ([]domain.NotificationSchedule, error)
+	UpdateLastSentAt(ctx context.Context, scheduleID string) error
+}
+
 // ---------- service ports ----------
 
 // TokenService generates and validates JWT tokens.

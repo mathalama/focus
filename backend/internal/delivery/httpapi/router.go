@@ -86,6 +86,13 @@ func NewRouter(handler *Handler, corsOrigin string, enableDevLogin bool, validat
 		api.GET("/notifications/sounds", handler.GetNotificationSounds)
 		api.PATCH("/notifications/sounds", handler.UpdateNotificationSounds)
 
+		api.GET("/preferences/session", handler.GetSessionPreferences)
+		api.PUT("/preferences/session", handler.UpdateSessionPreferences)
+		api.GET("/preferences/notifications", handler.ListNotificationSchedules)
+		api.POST("/preferences/notifications", handler.CreateNotificationSchedule)
+		api.PUT("/preferences/notifications/:id", handler.UpdateNotificationSchedule)
+		api.DELETE("/preferences/notifications/:id", handler.DeleteNotificationSchedule)
+
 		api.GET("/leaderboard", handler.GetLeaderboard)
 
 		api.GET("/shop/items", handler.ListItems)
