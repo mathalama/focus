@@ -63,6 +63,13 @@ func (rl *IPRateLimiter) getLimiter(key string) *rate.Limiter {
 
 func (rl *IPRateLimiter) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Allow OPTIONS requests to pass through without rate limiting
+		// to avoid breaking CORS preflight.
+		if c.Request.Method == http.MethodOptions {
+			c.Next()
+			return
+		}
+
 		key := c.ClientIP() + ":" + c.FullPath()
 		if !rl.getLimiter(key).Allow() {
 			markRateLimitBlocked(c.FullPath())
