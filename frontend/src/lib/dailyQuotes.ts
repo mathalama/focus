@@ -12,7 +12,7 @@ const quotesByLanguage: Record<AppLanguage, DailyQuote[]> = {
     { text: 'The future depends on what you do today.', author: 'Mahatma Gandhi' },
     { text: 'It always seems impossible until it is done.', author: 'Nelson Mandela' },
     { text: 'The secret of getting ahead is getting started.', author: 'Mark Twain' },
-    { text: 'Everyone thinks of changing the world, but no one thinks of changing himself.', author: 'Leo Tolstoy' },
+    { text: 'Everyone thinks of changing the world, but no one thinks of changing himself.', author: 'Lev Tolstoy' },
     { text: 'He who opens a school door, closes a prison.', author: 'Victor Hugo' },
     { text: 'The man who moves a mountain begins by carrying away small stones.', author: 'Confucius' },
     { text: 'Nothing in life is to be feared, it is only to be understood.', author: 'Marie Curie' },
