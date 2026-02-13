@@ -18,6 +18,35 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+var trustedDomains = map[string]bool{
+	// Global
+	"gmail.com":      true,
+	"googlemail.com": true,
+	"outlook.com":    true,
+	"hotmail.com":    true,
+	"live.com":       true,
+	"icloud.com":     true,
+	"me.com":          true,
+	"yahoo.com":      true,
+	"proton.me":      true,
+	"protonmail.com": true,
+	"zoho.com":       true,
+	"gmx.com":        true,
+	"aol.com":        true,
+
+	// CIS / SNG
+	"mail.ru":    true,
+	"yandex.ru":  true,
+	"yandex.kz":  true,
+	"yandex.by":  true,
+	"yandex.com": true,
+	"ya.ru":      true,
+	"list.ru":    true,
+	"bk.ru":      true,
+	"inbox.ru":   true,
+	"rambler.ru": true,
+}
+
 // AuthUseCase orchestrates authentication and user-management business logic.
 type AuthUseCase struct {
 	userRepo   UserRepository
@@ -103,7 +132,11 @@ func (uc *AuthUseCase) DevLogin(ctx context.Context, email, name, userAgent, ipA
 func (uc *AuthUseCase) Register(ctx context.Context, rawEmail, name, password string) (RegisterOutput, error) {
 	email, err := normalizeEmail(rawEmail)
 	if err != nil {
-		return RegisterOutput{}, domain.ErrInvalidEmail
+		return RegisterOutput{}, err
+	}
+
+	if !isTrustedDomain(email) {
+		return RegisterOutput{}, errors.New("only trusted email providers are allowed (Gmail, Mail.ru, Yandex, etc.)")
 	}
 
 	if len(password) < 8 {
@@ -254,6 +287,10 @@ func (uc *AuthUseCase) ResendVerification(ctx context.Context, rawEmail string) 
 		return ResendOutput{}, domain.ErrInvalidEmail
 	}
 
+	if !isTrustedDomain(email) {
+		return ResendOutput{}, errors.New("unsupported email provider")
+	}
+
 	authUser, err := uc.userRepo.GetAuthUserByEmail(ctx, email)
 	if errors.Is(err, domain.ErrNotFound) {
 		return ResendOutput{Resent: true}, nil // don't reveal whether email exists
@@ -302,6 +339,10 @@ func (uc *AuthUseCase) ForgotPassword(ctx context.Context, rawEmail string) (For
 	email, err := normalizeEmail(rawEmail)
 	if err != nil {
 		return ForgotPasswordOutput{}, domain.ErrInvalidEmail
+	}
+
+	if !isTrustedDomain(email) {
+		return ForgotPasswordOutput{}, errors.New("unsupported email provider")
 	}
 
 	// Get user (don't fail if not found, for security reasons)
@@ -385,6 +426,16 @@ func (uc *AuthUseCase) issueAuthTokens(ctx context.Context, user domain.User, us
 }
 
 // ---------- helpers ----------
+
+func isTrustedDomain(email string) bool {
+	email = strings.ToLower(strings.TrimSpace(email))
+	idx := strings.LastIndex(email, "@")
+	if idx <= 0 || idx == len(email)-1 {
+		return false
+	}
+	domain := email[idx+1:]
+	return trustedDomains[domain]
+}
 
 func (uc *AuthUseCase) buildVerifyLink(token string) (string, error) {
 	base := strings.TrimSpace(uc.verifyURL)
