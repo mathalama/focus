@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -70,17 +71,22 @@ func (r *Repository) VerifyEmailByToken(ctx context.Context, rawToken string) (d
 		tokenHash,
 	).Scan(&userID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
+			log.Printf("[Verify] Token not found or already used: %s", tokenHash)
 			return domain.User{}, domain.ErrEmailTokenInvalid
 		}
 		return domain.User{}, fmt.Errorf("find email verification token: %w", err)
 	}
 
 	var user domain.User
-	if err := tx.QueryRow(ctx,
-		`UPDATE users SET email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = $1
-		 RETURNING id, email, name, nectar_balance, total_nectar_earned, created_at`,
-		userID,
-	).Scan(&user.ID, &user.Email, &user.Name, &user.NectarBalance, &user.TotalNectarEarned, &user.CreatedAt); err != nil {
+	const updateQuery = `
+		UPDATE users 
+		SET email_verified_at = COALESCE(email_verified_at, NOW()) 
+		WHERE id = $1
+		RETURNING id, email, name, role, nectar_balance, total_nectar_earned, created_at
+	`
+	if err := tx.QueryRow(ctx, updateQuery, userID).Scan(
+		&user.ID, &user.Email, &user.Name, &user.Role, &user.NectarBalance, &user.TotalNectarEarned, &user.CreatedAt,
+	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.User{}, domain.ErrNotFound
 		}
@@ -95,6 +101,7 @@ func (r *Repository) VerifyEmailByToken(ctx context.Context, rawToken string) (d
 		return domain.User{}, fmt.Errorf("commit verify email tx: %w", err)
 	}
 
+	log.Printf("[Verify] Successfully verified email for user %s (%s)", user.ID, user.Email)
 	return user, nil
 }
 

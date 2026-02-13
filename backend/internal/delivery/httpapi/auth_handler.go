@@ -134,6 +134,7 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 	if errors.Is(err, domain.ErrEmailNotVerified) {
+		log.Printf("[Auth] Login failed for %s: email not verified", req.Email)
 		respondError(c, http.StatusForbidden, "email is not verified")
 		return
 	}
@@ -142,7 +143,7 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		log.Printf("login failed: %v", err)
+		log.Printf("login failed for %s: %v", req.Email, err)
 		respondError(c, http.StatusInternalServerError, "failed to authenticate")
 		return
 	}
