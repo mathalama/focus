@@ -1,54 +1,52 @@
-▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
-
-# ◆ Mathalama Focus
+# Mathalama Focus
 
 > Calm-first focus and reflection app with web UI, API, and Telegram bot integration.
 
-▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+---
 
-## ⬥ Technology Stack
+## → Technology Stack
 
 | Component | Technology |
 |-----------|-----------|
-| **▸ Backend** | Go · Gin · PostgreSQL |
-| **▸ Telegram Bot** | Go · Long Polling · REST API |
-| **▸ Frontend** | React · Vite · TypeScript · Tailwind CSS |
-| **▸ Infrastructure** | Docker Compose · PostgreSQL |
+| **★ Backend** | Go · Gin · PostgreSQL |
+| **★ Telegram Bot** | Go · Long Polling · REST API |
+| **★ Frontend** | React · Vite · TypeScript · Tailwind CSS |
+| **★ Infrastructure** | Docker Compose · PostgreSQL |
 
 ---
 
-## ⬥ Project Structure
+## → Project Structure
 
 ```
 focus/
-├── backend/                  ◦ REST API & Core Business Logic
+├── backend/                  ★ REST API & Core Business Logic
 │   ├── cmd/
-│   │   ├── api/              ◦ API Server
-│   │   └── migrate/          ◦ Database Migration Runner
+│   │   ├── api/              ★ API Server
+│   │   └── migrate/          ★ Database Migration Runner
 │   ├── internal/
-│   │   ├── config/           ◦ Configuration Management
-│   │   ├── delivery/httpapi/ ◦ HTTP Endpoints
-│   │   ├── domain/           ◦ Domain Models & Errors
-│   │   ├── infrastructure/   ◦ External Services (Email, JWT, DB)
-│   │   └── usecase/          ◦ Business Logic
-│   ├── migrations/           ◦ SQL Migration Files
+│   │   ├── config/           ★ Configuration Management
+│   │   ├── delivery/httpapi/ ★ HTTP Endpoints
+│   │   ├── domain/           ★ Domain Models & Errors
+│   │   ├── infrastructure/   ★ External Services (Email, JWT, DB)
+│   │   └── usecase/          ★ Business Logic
+│   ├── migrations/           ★ SQL Migration Files
 │   └── Dockerfile
 │
-├── telegram-bot/            ◦ Telegram Bot Service
+├── telegram-bot/            ★ Telegram Bot Service
 │   ├── cmd/bot/
 │   ├── internal/
 │   └── Dockerfile
 │
-├── frontend/                ◦ Web Application (React)
+├── frontend/                ★ Web Application (React)
 │   ├── src/
-│   │   ├── api/             ◦ API Client
-│   │   ├── components/      ◦ UI Components
-│   │   ├── context/         ◦ React Context
-│   │   └── pages/           ◦ Page Components
+│   │   ├── api/             ★ API Client
+│   │   ├── components/      ★ UI Components
+│   │   ├── context/         ★ React Context
+│   │   └── pages/           ★ Page Components
 │   ├── public/
 │   └── vite.config.ts
 │
-└── browser-extension/       ◦ Browser Extension (TypeScript)
+└── browser-extension/       ★ Browser Extension (TypeScript)
     ├── src/
     │   ├── background/
     │   ├── content/
@@ -58,9 +56,9 @@ focus/
 
 ---
 
-## ⬥ Quick Start with Docker
+## → Quick Start with Docker
 
-### ▸ Step 1: Prepare Environment Files
+### ► Step 1: Prepare Environment Files
 
 ```bash
 cp backend/.env.example backend/.env
@@ -68,7 +66,7 @@ cp telegram-bot/.env.example telegram-bot/.env
 cp frontend/.env.example frontend/.env
 ```
 
-### ▸ Step 2: Configure Secrets
+### ► Step 2: Configure Secrets
 
 Edit environment files with required values:
 
@@ -84,13 +82,13 @@ TELEGRAM_BOT_TOKEN=your_telegram_token
 TELEGRAM_BOT_AUTH_TOKEN=your_bot_auth_token  # Same as backend
 ```
 
-### ▸ Step 3: Start Services
+### ► Step 3: Start Services
 
 ```bash
 docker compose up -d --build postgres migrate backend telegram-bot
 ```
 
-### ▸ Step 4: Start Frontend
+### ► Step 4: Start Frontend
 
 ```bash
 cd frontend
@@ -98,7 +96,7 @@ npm install
 npm run dev
 ```
 
-### ▸ Service Endpoints
+### ► Service Endpoints
 
 | Service | URL | Purpose |
 |---------|-----|---------|
@@ -109,9 +107,9 @@ npm run dev
 
 ---
 
-## ⬥ Local Development (No Docker)
+## → Local Development (No Docker)
 
-### ▸ Backend & Migrations
+### ► Backend & Migrations
 
 ```bash
 cd backend
@@ -119,14 +117,14 @@ go run ./cmd/migrate  # Run database migrations first
 go run ./cmd/api      # Start API server
 ```
 
-### ▸ Telegram Bot
+### ► Telegram Bot
 
 ```bash
 cd telegram-bot
 go run ./cmd/bot
 ```
 
-### ▸ Frontend
+### ► Frontend
 
 ```bash
 cd frontend
@@ -136,17 +134,17 @@ npm run dev
 
 ---
 
-## ⬥ Database Migrations
+## → Database Migrations
 
-**▸ Location:** `backend/migrations/`
+**► Location:** `backend/migrations/`
 
-**▸ How It Works:**
-- SQL files are versioned and tracked in `schema_migrations` table
-- Migration runner: `backend/cmd/migrate`
-- Checksum validation prevents duplicate/corrupted migrations
-- Docker Compose runs migrations automatically via dedicated service
+**► How It Works:**
+• SQL files are versioned and tracked in `schema_migrations` table
+• Migration runner: `backend/cmd/migrate`
+• Checksum validation prevents duplicate/corrupted migrations
+• Docker Compose runs migrations automatically via dedicated service
 
-**▸ Available Migrations:**
+**► Available Migrations:**
 ```
 001_init.sql
 002_add_nectar.sql
@@ -166,70 +164,70 @@ npm run dev
 
 ---
 
-## ⬥ Environment Configuration
+## → Environment Configuration
 
-### ▸ Backend (`backend/.env`)
+### ► Backend (`backend/.env`)
 
-**◾ Server:**
-- `PORT=8080`
-- `DATABASE_URL=postgres://mathalama:mathalama@localhost:5432/mathalama?sslmode=disable`
-- `CORS_ORIGIN=http://localhost:5173`
+**○ Server:**
+• `PORT=8080`
+• `DATABASE_URL=postgres://mathalama:mathalama@localhost:5432/mathalama?sslmode=disable`
+• `CORS_ORIGIN=http://localhost:5173`
 
-**◾ Authentication:**
-- `JWT_SECRET=dev-secret-change-me`
-- `ENABLE_DEV_LOGIN=true`
-- `REFRESH_SESSION_TTL_HOURS=720`
-- `MAX_ACTIVE_AUTH_SESSIONS=5`
-- `AUTH_SESSION_BIND_CLIENT=true`
-- `MAX_SESSION_PAUSES=3`
+**○ Authentication:**
+• `JWT_SECRET=dev-secret-change-me`
+• `ENABLE_DEV_LOGIN=true`
+• `REFRESH_SESSION_TTL_HOURS=720`
+• `MAX_ACTIVE_AUTH_SESSIONS=5`
+• `AUTH_SESSION_BIND_CLIENT=true`
+• `MAX_SESSION_PAUSES=3`
 
-**◾ Integrations:**
-- `TELEGRAM_BOT_AUTH_TOKEN=dev-telegram-bot-auth-change-me`
-- `TELEGRAM_LINK_CODE_TTL_MINUTES=10`
-- `RESEND_API_KEY=`
-- `RESEND_FROM_EMAIL=`
+**○ Integrations:**
+• `TELEGRAM_BOT_AUTH_TOKEN=dev-telegram-bot-auth-change-me`
+• `TELEGRAM_LINK_CODE_TTL_MINUTES=10`
+• `RESEND_API_KEY=`
+• `RESEND_FROM_EMAIL=`
 
-**◾ Email Verification:**
-- `EMAIL_OUTBOX_POLL_SECONDS=2`
-- `EMAIL_OUTBOX_MAX_ATTEMPTS=5`
-- `EMAIL_VERIFY_URL_BASE=http://localhost:8080/api/v1/auth/verify-email`
-- `EMAIL_VERIFY_SUCCESS_REDIRECT=http://localhost:5173/login?verified=1`
-- `EMAIL_VERIFY_FAIL_REDIRECT=http://localhost:5173/login?verified=0`
-- `EMAIL_VERIFICATION_TTL_MINUTES=60`
+**○ Email Verification:**
+• `EMAIL_OUTBOX_POLL_SECONDS=2`
+• `EMAIL_OUTBOX_MAX_ATTEMPTS=5`
+• `EMAIL_VERIFY_URL_BASE=http://localhost:8080/api/v1/auth/verify-email`
+• `EMAIL_VERIFY_SUCCESS_REDIRECT=http://localhost:5173/login?verified=1`
+• `EMAIL_VERIFY_FAIL_REDIRECT=http://localhost:5173/login?verified=0`
+• `EMAIL_VERIFICATION_TTL_MINUTES=60`
 
-### ▸ Telegram Bot (`telegram-bot/.env`)
+### ► Telegram Bot (`telegram-bot/.env`)
 
-**◾ API Configuration:**
-- `TELEGRAM_BOT_TOKEN=`
-- `TELEGRAM_BOT_AUTH_TOKEN=dev-telegram-bot-auth-change-me`
-- `BACKEND_URL=http://localhost:8080`
-- `APP_URL=http://localhost:5173`
-- `TELEGRAM_POLL_TIMEOUT_SECONDS=30`
-- `BOT_INTERNAL_API_ADDR=:8091`
+**○ API Configuration:**
+• `TELEGRAM_BOT_TOKEN=`
+• `TELEGRAM_BOT_AUTH_TOKEN=dev-telegram-bot-auth-change-me`
+• `BACKEND_URL=http://localhost:8080`
+• `APP_URL=http://localhost:5173`
+• `TELEGRAM_POLL_TIMEOUT_SECONDS=30`
+• `BOT_INTERNAL_API_ADDR=:8091`
 
-### ▸ Frontend (`frontend/.env`)
+### ► Frontend (`frontend/.env`)
 
-**◾ API:**
-- `VITE_API_BASE_URL=http://localhost:8080`
+**○ API:**
+• `VITE_API_BASE_URL=http://localhost:8080`
 
 ---
 
-## ⬥ Security & Authentication
+## → Security & Authentication
 
-### ▸ Best Practices
+### ► Best Practices
 
-▸ **Development Only:**
-- `ENABLE_DEV_LOGIN` must be `false` in production
-- Docker Compose already sets `ENABLE_DEV_LOGIN=false` for backend service
-- `.env` files are gitignored — keep them local
+**► Development Only:**
+• `ENABLE_DEV_LOGIN` must be `false` in production
+• Docker Compose already sets `ENABLE_DEV_LOGIN=false` for backend service
+• `.env` files are gitignored — keep them local
 
-▸ **Idempotency:**
+**► Idempotency:**
 Include `Idempotency-Key` header on critical write operations:
-- `PATCH /api/v1/sessions/:sessionID/complete`
-- `POST /api/v1/shop/items/:itemID/buy`
-- `POST /api/v1/integrations/telegram/link`
+• `PATCH /api/v1/sessions/:sessionID/complete`
+• `POST /api/v1/shop/items/:itemID/buy`
+• `POST /api/v1/integrations/telegram/link`
 
-### ▸ Authentication Flow (v2)
+### ► Authentication Flow (v2)
 
 **Login Response:**
 ```json
@@ -240,43 +238,43 @@ Include `Idempotency-Key` header on critical write operations:
 ```
 
 **Available Endpoints:**
-- `POST /api/v1/auth/refresh` — Refresh access token
-- `POST /api/v1/auth/logout` — Logout current session
-- `POST /api/v1/auth/logout-all` — Logout all sessions (Bearer token required)
-- `GET /api/v1/auth/sessions` — List active sessions (Bearer token required)
+• `POST /api/v1/auth/refresh` — Refresh access token
+• `POST /api/v1/auth/logout` — Logout current session
+• `POST /api/v1/auth/logout-all` — Logout all sessions (Bearer token required)
+• `GET /api/v1/auth/sessions` — List active sessions (Bearer token required)
 
 ---
 
-## ⬥ Admin API
+## → Admin API
 
 Requires Bearer token authentication and admin role:
 
-- `GET /api/v1/admin/health` — Health check
-- `GET /api/v1/admin/email-deliveries` — Email delivery status
-- `GET /api/v1/admin/events` — Product events
+• `GET /api/v1/admin/health` — Health check
+• `GET /api/v1/admin/email-deliveries` — Email delivery status
+• `GET /api/v1/admin/events` — Product events
 
 ---
 
-## ⬥ Product Observability
+## → Product Observability
 
-▸ **Request Tracking:**
-- Structured JSON logs with `request_id` (via `X-Request-ID` header)
-- Unique trace ID for every API request
+**► Request Tracking:**
+• Structured JSON logs with `request_id` (via `X-Request-ID` header)
+• Unique trace ID for every API request
 
-▸ **Metrics:**
-- Prometheus-compatible metrics available at `/metrics`
-- Response times, request counts, error rates
+**► Metrics:**
+• Prometheus-compatible metrics available at `/metrics`
+• Response times, request counts, error rates
 
-▸ **Event System:**
-- Product events persisted in `product_events` table
-- Email verification via async DB outbox (`email_outbox`)
-- Automatic retry with exponential backoff on delivery failure
+**► Event System:**
+• Product events persisted in `product_events` table
+• Email verification via async DB outbox (`email_outbox`)
+• Automatic retry with exponential backoff on delivery failure
 
 ---
 
-## ⬥ Branching & Release Strategy
+## → Branching & Release Strategy
 
-**▸ Branch Structure:**
+**► Branch Structure:**
 
 | Branch | Purpose | Phase Gate |
 |--------|---------|-----------|
@@ -284,24 +282,24 @@ Requires Bearer token authentication and admin role:
 | `stage` | Open testing | open-testing |
 | `prod` | Production release | release |
 
-**▸ CI/CD Pipeline:**
-- Same build validation runs on all branches
-- Branch-aware deployment triggers appropriate phase gates
-- Supports canary deployments and gradual rollouts
+**► CI/CD Pipeline:**
+• Same build validation runs on all branches
+• Branch-aware deployment triggers appropriate phase gates
+• Supports canary deployments and gradual rollouts
 
 ---
 
-## ⬥ Contributing
+## → Contributing
 
-**▸ Getting Started:**
+**► Getting Started:**
 1. Fork the repository
 2. Create feature branch from `dev`
 3. Submit pull request to `dev` first
 4. After testing, PR can be merged to `stage` then `prod`
 
-**▸ Code Style:**
-- Backend: Go conventions (gofmt)
-- Frontend: ESLint + Prettier
-- Migrations: Numbered SQL files with descriptive names
+**► Code Style:**
+• Backend: Go conventions (gofmt)
+• Frontend: ESLint + Prettier
+• Migrations: Numbered SQL files with descriptive names
 
-▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+---
