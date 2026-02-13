@@ -39,6 +39,9 @@ const translations: Record<AppLanguage, TranslationDict> = {
     'login.resendSuccess': 'Verification email sent.',
     'login.resendError': 'Failed to resend verification email.',
     'login.error': 'Login failed. Please check your connection and try again.',
+    'login.privacyAgreement': 'I agree to the ',
+    'login.privacyLink': 'Privacy Policy',
+    'login.privacyError': 'You must agree to the Privacy Policy to continue.',
 
     'dashboard.title': 'Dashboard',
     'dashboard.statusLine': '// STATUS: ONLINE | USER: {{name}}',

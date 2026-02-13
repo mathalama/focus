@@ -4,7 +4,7 @@ import { AppLanguage, useLanguage } from '../context/LanguageContext';
 import { AppTheme, useTheme } from '../context/ThemeContext';
 import { Card } from '../components/ui/Card';
 import { ToggleSwitch } from '../components/ui/ToggleSwitch';
-import { Globe, Palette, UserRound, Bell, Volume2, Loader } from 'lucide-react';
+import { Globe, Palette, UserRound, Bell, Volume2, Loader, ExternalLink } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { notificationsEnabled, requestNotificationPermission } from '../lib/notifications';
 import { playSuccessMelody, playSound, fetchSoundPreferences } from '../lib/sounds';
@@ -138,6 +138,31 @@ export const ProfilePage: React.FC = () => {
         </div>
       </Card>
 
+      <a 
+        href="https://t.me/mathalama_lab" 
+        target="_blank" 
+        rel="noopener noreferrer"
+        className="block group"
+      >
+        <Card className="border-[#24A1DE]/30 bg-[#24A1DE]/5 p-6 shadow-none transition-colors group-hover:bg-[#24A1DE]/10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#24A1DE] text-white shadow-lg shadow-[#24A1DE]/20">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m22 2-7 20-4-9-9-4Z" />
+                  <path d="M22 2 11 13" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-mono text-sm font-bold uppercase tracking-wide text-primary">Mathalama Lab</h3>
+                <p className="text-xs text-muted-foreground">Subscribe to our Telegram channel for updates</p>
+              </div>
+            </div>
+            <ExternalLink size={16} className="text-[#24A1DE] opacity-50 group-hover:opacity-100 transition-opacity" />
+          </div>
+        </Card>
+      </a>
+
       <Card className="border-border bg-surface p-6 shadow-none">
         <div className="mb-4 flex items-center gap-2">
           <Globe size={16} className="text-accent" />
@@ -183,7 +208,7 @@ export const ProfilePage: React.FC = () => {
           ))}
         </select>
         <p className="mt-3 text-xs text-muted-foreground">
-          {t('profile.themeRollout')}
+          {t('themeRollout')}
         </p>
       </Card>
 

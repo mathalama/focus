@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
 import { Card } from '../components/ui/Card';
@@ -19,6 +19,7 @@ export const LoginPage: React.FC = () => {
   const [resending, setResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
   const verifyState = useMemo(() => {
@@ -41,6 +42,11 @@ export const LoginPage: React.FC = () => {
     setNotice(null);
     try {
       if (mode === 'register') {
+        if (!agreedToPrivacy) {
+          setError(t('login.privacyError'));
+          setLoading(false);
+          return;
+        }
         const payload = await api.auth.register(email, name, password);
         setNotice(payload?.verification_email_sent ? t('login.registerSuccess') : t('login.registerCreatedButEmailFailed'));
         setMode('login');
@@ -167,6 +173,25 @@ export const LoginPage: React.FC = () => {
               required
             />
           </div>
+
+          {mode === 'register' && (
+            <div className="flex items-start gap-3">
+              <input
+                id="privacy"
+                type="checkbox"
+                checked={agreedToPrivacy}
+                onChange={(e) => setAgreedToPrivacy(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-border bg-background accent-accent"
+                required
+              />
+              <label htmlFor="privacy" className="text-xs text-muted-foreground leading-tight">
+                {t('login.privacyAgreement')}
+                <Link to="/privacy" className="text-accent underline hover:text-accent/80 transition-colors">
+                  {t('login.privacyLink')}
+                </Link>
+              </label>
+            </div>
+          )}
 
           {error && (
             <div className="rounded-lg border border-red-500/30 bg-red-950/20 px-4 py-2 text-xs font-mono text-red-400 animate-in fade-in">
