@@ -76,6 +76,17 @@ window.addEventListener('storage', (event) => {
   }
 });
 
+// Listen for storage changes from service worker (for stopFocus, etc)
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.focusSession) {
+    try {
+      checkAndBlock();
+    } catch (error) {
+      console.error('Error checking focus session after storage change:', error);
+    }
+  }
+});
+
 // Also listen for custom events dispatched from page
 window.addEventListener('focus-session-changed', () => {
   try {
@@ -148,7 +159,7 @@ async function checkAndBlock(): Promise<void> {
     );
 
     if (isBlocked) {
-      showBlockingPage(session);
+      showBlockingPage(session, currentHost);
     } else {
       removeBlockingPage();
     }
@@ -166,7 +177,7 @@ function isHostMatching(currentHost: string, domain: string): boolean {
   );
 }
 
-function showBlockingPage(session: FocusSession): void {
+function showBlockingPage(session: FocusSession, currentHost: string): void {
   if (document.getElementById('mathalama-focus-blocker')) {
     return;
   }
@@ -249,18 +260,25 @@ function showBlockingPage(session: FocusSession): void {
         color: #e8b8b8;
       }
       
-      .blocker-button.danger:hover {
-        background: #552a2a;
-        border-color: #777;
+      .blocker-button.secondary {
+        background: #2a4a4a;
+        border-color: #3a6a6a;
+        color: #a8e0e0;
+      }
+      
+      .blocker-button.secondary:hover {
+        background: #2a5a5a;
+        border-color: #4a7a7a;
       }
     </style>
     
     <div class="blocker-content">
-      <div class="blocker-title">Focus Mode</div>
-      <div class="blocker-message">Stay focused, avoid distractions</div>
+      <div class="blocker-title">Focus Mode Active</div>
+      <div class="blocker-message">${currentHost} is blocked during focus time</div>
       <div class="blocker-timer" id="timer">25:00</div>
       <div class="blocker-remaining" id="remaining">Time remaining in focus session</div>
       <div>
+        <button class="blocker-button secondary" onclick="window.location.href='https://focus.mathalama.dev'">Go to Focus Site</button>
         <button class="blocker-button" onclick="window.history.back()">Go Back</button>
         <button class="blocker-button danger" id="end-focus">End Focus</button>
       </div>

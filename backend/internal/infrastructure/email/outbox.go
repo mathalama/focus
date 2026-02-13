@@ -62,8 +62,8 @@ func NewOutboxService(
 
 func (s *OutboxService) SendVerificationEmail(ctx context.Context, toEmail, toName, verifyLink string) error {
 	const query = `
-		INSERT INTO email_outbox (to_email, to_name, verify_link, email_type, status, next_attempt_at)
-		VALUES ($1, $2, $3, 'verification', 'pending', NOW())
+		INSERT INTO email_outbox (to_email, to_name, verify_link, reset_link, email_type, status, next_attempt_at)
+		VALUES ($1, $2, $3, '', 'verification', 'pending', NOW())
 	`
 	_, err := s.pool.Exec(ctx, query, strings.TrimSpace(toEmail), strings.TrimSpace(toName), strings.TrimSpace(verifyLink))
 	if err != nil {
@@ -74,8 +74,8 @@ func (s *OutboxService) SendVerificationEmail(ctx context.Context, toEmail, toNa
 
 func (s *OutboxService) SendPasswordResetEmail(ctx context.Context, toEmail, toName, resetLink string) error {
 	const query = `
-		INSERT INTO email_outbox (to_email, to_name, reset_link, email_type, status, next_attempt_at)
-		VALUES ($1, $2, $3, 'password_reset', 'pending', NOW())
+		INSERT INTO email_outbox (to_email, to_name, verify_link, reset_link, email_type, status, next_attempt_at)
+		VALUES ($1, $2, '', $3, 'password_reset', 'pending', NOW())
 	`
 	_, err := s.pool.Exec(ctx, query, strings.TrimSpace(toEmail), strings.TrimSpace(toName), strings.TrimSpace(resetLink))
 	if err != nil {
@@ -119,8 +119,10 @@ func (s *OutboxService) processOne(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("claim next email: %w", err)
 	}
+
+	log.Printf("[Outbox] Delivering email %s to %s (type: %s)", job.ID, job.ToEmail, job.EmailType)
 
 	sendCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	var sendErr error
@@ -132,13 +134,17 @@ func (s *OutboxService) processOne(ctx context.Context) (bool, error) {
 	cancel()
 
 	if sendErr == nil {
+		log.Printf("[Outbox] Successfully sent email %s", job.ID)
 		if err := s.markSent(ctx, job.ID); err != nil {
 			return true, err
 		}
 		return true, nil
 	}
 
+	log.Printf("[Outbox] Failed to send email %s: %v", job.ID, sendErr)
+
 	if job.Attempts >= s.maxAttempts {
+		log.Printf("[Outbox] Email %s reached max attempts, marking as failed", job.ID)
 		if err := s.markFailed(ctx, job.ID, sendErr.Error()); err != nil {
 			return true, err
 		}
@@ -154,7 +160,7 @@ func (s *OutboxService) processOne(ctx context.Context) (bool, error) {
 func (s *OutboxService) claimNext(ctx context.Context) (queuedEmail, error) {
 	const query = `
 		WITH candidate AS (
-			SELECT id, to_email, to_name, verify_link, reset_link, email_type, attempts
+			SELECT id
 			FROM email_outbox
 			WHERE status IN ('pending', 'retry') AND next_attempt_at <= NOW()
 			ORDER BY created_at
@@ -163,18 +169,18 @@ func (s *OutboxService) claimNext(ctx context.Context) (queuedEmail, error) {
 		)
 		UPDATE email_outbox e
 		SET status = 'processing',
-		    attempts = candidate.attempts + 1,
+		    attempts = e.attempts + 1,
 		    updated_at = NOW()
 		FROM candidate
 		WHERE e.id = candidate.id
-		RETURNING e.id, candidate.to_email, candidate.to_name, candidate.verify_link, candidate.reset_link, candidate.email_type, e.attempts
+		RETURNING e.id, e.to_email, e.to_name, e.verify_link, COALESCE(e.reset_link, ''), COALESCE(e.email_type, 'verification'), e.attempts
 	`
 
 	var job queuedEmail
-	if err := s.pool.QueryRow(ctx, query).Scan(&job.ID, &job.ToEmail, &job.ToName, &job.VerifyLink, &job.ResetLink, &job.EmailType, &job.Attempts); err != nil {
-		return queuedEmail{}, err
-	}
-	return job, nil
+	err := s.pool.QueryRow(ctx, query).Scan(
+		&job.ID, &job.ToEmail, &job.ToName, &job.VerifyLink, &job.ResetLink, &job.EmailType, &job.Attempts,
+	)
+	return job, err
 }
 
 func (s *OutboxService) markSent(ctx context.Context, jobID string) error {

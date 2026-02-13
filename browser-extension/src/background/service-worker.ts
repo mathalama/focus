@@ -50,6 +50,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // Focus state changed from website via content script
     console.log('Focus state changed:', request.state);
     sendResponse({ ok: true });
+  } else if (request.action === 'stopFocus') {
+    // User clicked End Focus button
+    stopFocusSession().then(sendResponse);
   }
   return true; // Will respond asynchronously
 });
