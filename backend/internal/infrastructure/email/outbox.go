@@ -122,8 +122,6 @@ func (s *OutboxService) processOne(ctx context.Context) (bool, error) {
 		return false, fmt.Errorf("claim next email: %w", err)
 	}
 
-	log.Printf("[Outbox] Delivering email %s to %s (type: %s)", job.ID, job.ToEmail, job.EmailType)
-
 	sendCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	var sendErr error
 	if job.EmailType == "password_reset" {
@@ -134,17 +132,13 @@ func (s *OutboxService) processOne(ctx context.Context) (bool, error) {
 	cancel()
 
 	if sendErr == nil {
-		log.Printf("[Outbox] Successfully sent email %s", job.ID)
 		if err := s.markSent(ctx, job.ID); err != nil {
 			return true, err
 		}
 		return true, nil
 	}
 
-	log.Printf("[Outbox] Failed to send email %s: %v", job.ID, sendErr)
-
 	if job.Attempts >= s.maxAttempts {
-		log.Printf("[Outbox] Email %s reached max attempts, marking as failed", job.ID)
 		if err := s.markFailed(ctx, job.ID, sendErr.Error()); err != nil {
 			return true, err
 		}

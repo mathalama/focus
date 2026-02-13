@@ -140,19 +140,11 @@ func (uc *AuthUseCase) Register(ctx context.Context, rawEmail, name, password st
 				if err := uc.emailSvc.SendVerificationEmail(ctx, user.Email, user.Name, verifyLink); err == nil {
 					emailSent = true
 					expiresAt = tokenExpiresAt.UTC()
-					log.Printf("verification email enqueued for user %s (%s)", user.ID, user.Email)
 				} else {
 					log.Printf("register verification email send failed (user=%s): %v", user.ID, err)
 				}
-			} else {
-				log.Printf("failed to build verify link for user %s: %v", user.ID, err)
 			}
-		} else {
-			log.Printf("failed to create verification token for user %s: %v", user.ID, err)
 		}
-	} else {
-		log.Printf("skipping verification email for user %s: email service not configured (svc=%v, url=%s)", 
-			user.ID, uc.emailSvc != nil, uc.verifyURL)
 	}
 
 	return RegisterOutput{
