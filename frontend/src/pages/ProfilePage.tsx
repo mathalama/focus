@@ -154,8 +154,8 @@ export const ProfilePage: React.FC = () => {
                 </svg>
               </div>
               <div>
-                <h3 className="font-mono text-sm font-bold uppercase tracking-wide text-primary">Mathalama Lab</h3>
-                <p className="text-xs text-muted-foreground">Subscribe to our Telegram channel for updates</p>
+                <h3 className="font-mono text-sm font-bold uppercase tracking-wide text-primary">{t('profile.telegram.title')}</h3>
+                <p className="text-xs text-muted-foreground">{t('profile.telegram.subscribe')}</p>
               </div>
             </div>
             <ExternalLink size={16} className="text-[#24A1DE] opacity-50 group-hover:opacity-100 transition-opacity" />
