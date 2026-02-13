@@ -2,6 +2,13 @@
 
 > Calm-first focus and reflection app with web UI, API, and Telegram bot integration.
 
+![Go](https://img.shields.io/badge/Go-1.21-00ADD8?style=flat&logo=go)
+![React](https://img.shields.io/badge/React-18-61DAFB?style=flat&logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat&logo=typescript)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?style=flat&logo=postgresql)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat&logo=docker)
+![License](https://img.shields.io/badge/License-MIT-green?style=flat)
+
 ---
 
 ## → Technology Stack
