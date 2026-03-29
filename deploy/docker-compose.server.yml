@@ -1,0 +1,75 @@
+services:
+  migrate:
+    image: ${BACKEND_IMAGE}
+    container_name: mathalama-focus-migrate
+    environment: &backend-env
+      PORT: ${PORT:-8080}
+      DATABASE_URL: ${DATABASE_URL}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      JWT_SECRET: ${JWT_SECRET}
+      ENABLE_DEV_LOGIN: ${ENABLE_DEV_LOGIN:-false}
+      REFRESH_SESSION_TTL_HOURS: ${REFRESH_SESSION_TTL_HOURS:-720}
+      MAX_ACTIVE_AUTH_SESSIONS: ${MAX_ACTIVE_AUTH_SESSIONS:-5}
+      AUTH_SESSION_BIND_CLIENT: ${AUTH_SESSION_BIND_CLIENT:-true}
+      MAX_SESSION_PAUSES: ${MAX_SESSION_PAUSES:-3}
+      TELEGRAM_BOT_AUTH_TOKEN: ${TELEGRAM_BOT_AUTH_TOKEN}
+      TELEGRAM_LINK_CODE_TTL_MINUTES: ${TELEGRAM_LINK_CODE_TTL_MINUTES:-10}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-}
+      EMAIL_OUTBOX_POLL_SECONDS: ${EMAIL_OUTBOX_POLL_SECONDS:-2}
+      EMAIL_OUTBOX_MAX_ATTEMPTS: ${EMAIL_OUTBOX_MAX_ATTEMPTS:-5}
+      EMAIL_VERIFY_URL_BASE: ${EMAIL_VERIFY_URL_BASE:-http://localhost:8080/api/v1/auth/verify-email}
+      EMAIL_VERIFY_SUCCESS_REDIRECT: ${EMAIL_VERIFY_SUCCESS_REDIRECT:-http://localhost:5173/login?verified=1}
+      EMAIL_VERIFY_FAIL_REDIRECT: ${EMAIL_VERIFY_FAIL_REDIRECT:-http://localhost:5173/login?verified=0}
+      EMAIL_VERIFICATION_TTL_MINUTES: ${EMAIL_VERIFICATION_TTL_MINUTES:-60}
+      EMAIL_RESET_PASSWORD_URL_BASE: ${EMAIL_RESET_PASSWORD_URL_BASE:-http://localhost:5173/reset-password}
+      MIGRATIONS_DIR: /app/migrations
+    entrypoint: ["/app/migrate"]
+    restart: "no"
+    networks:
+      - default
+
+  backend:
+    image: ${BACKEND_IMAGE}
+    container_name: mathalama-focus-backend
+    environment: *backend-env
+    restart: unless-stopped
+    ports:
+      - ${BACKEND_PORT:-8080}:8080
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+      - proxy
+
+  telegram-bot:
+    image: ${TELEGRAM_BOT_IMAGE}
+    container_name: mathalama-focus-telegram-bot
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_BOT_AUTH_TOKEN: ${TELEGRAM_BOT_AUTH_TOKEN}
+      BACKEND_URL: ${BACKEND_URL:-http://backend:8080}
+      APP_URL: ${APP_URL:-http://localhost:5173}
+      TELEGRAM_POLL_TIMEOUT_SECONDS: ${TELEGRAM_POLL_TIMEOUT_SECONDS:-30}
+      BOT_INTERNAL_API_ADDR: ${BOT_INTERNAL_API_ADDR:-:8091}
+    restart: unless-stopped
+    ports:
+      - ${BOT_PORT:-8091}:8091
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8091/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+
+networks:
+  proxy:
+    name: ${DOCKER_NETWORK:-global_proxy}
+    external: true
