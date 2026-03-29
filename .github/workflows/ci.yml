@@ -81,23 +81,21 @@ jobs:
       - name: Deploy via native SSH
         env:
           SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SERVER_IP: ${{ secrets.SERVER_IP }} # ОБЯЗАТЕЛЬНО ПРОКИНУТЬ ТУТ
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }} # И ЭТО ТОЖЕ
         run: |
-          # 1. Настраиваем SSH-агента и ключ
           mkdir -p ~/.ssh
           echo "$SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           
-          # 2. Добавляем сервер в известные хосты, чтобы не было промпта
-          ssh-keyscan -p 22 ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+          # Теперь $SERVER_IP будет виден внутри скрипта
+          ssh-keyscan -H "$SERVER_IP" >> ~/.ssh/known_hosts
 
-          # 3. Выполняем деплой одной командой
-          ssh -i ~/.ssh/id_rsa ubuntu@${{ secrets.SERVER_IP }} << 'EOF'
-            echo "Connected successfully via native SSH!"
+          ssh -i ~/.ssh/id_rsa ubuntu@"$SERVER_IP" << EOF
+            echo "Connected successfully!"
             
-            # Логин в GHCR
-            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
-            # Обновляем образ
             docker pull ghcr.io/${{ github.repository }}/backend:latest
             
             # Миграции
@@ -105,7 +103,7 @@ jobs:
               -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
               ghcr.io/${{ github.repository }}/backend:latest /app/migrate
             
-            # Перезапуск контейнера
+            # Перезапуск
             docker stop focus-backend || true
             docker rm focus-backend || true
             
@@ -123,6 +121,4 @@ jobs:
               -e EMAIL_VERIFY_SUCCESS_REDIRECT="https://focus.mathalama.dev/login?verified=1" \
               -e EMAIL_VERIFY_FAIL_REDIRECT="https://focus.mathalama.dev/login?verified=0" \
               ghcr.io/${{ github.repository }}/backend:latest
-            
-            echo "Deploy finished!"
           EOF
