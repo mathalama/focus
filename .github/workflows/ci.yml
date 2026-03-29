@@ -84,6 +84,14 @@ jobs:
     needs: release-phase
     steps:
       - uses: actions/checkout@v4
+      
+      # ДОБАВЛЕНО: Создаем пустые файлы .env, чтобы docker-compose не ругался
+      - name: Create dummy env files
+        run: |
+          touch .env
+          mkdir -p backend
+          touch backend/.env
+          
       - name: Validate docker compose
         run: docker compose config
 
