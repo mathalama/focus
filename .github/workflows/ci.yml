@@ -123,7 +123,7 @@ jobs:
 
           : "${server_user:=ubuntu}"
           : "${server_port:=22}"
-          : "${deploy_path:=/opt/focus}"
+          : "${deploy_path:=focus}"
 
           if [ -z "$server_host" ]; then
             echo "SERVER_IP secret is empty or invalid" >&2
