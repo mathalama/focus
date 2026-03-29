@@ -82,6 +82,8 @@ jobs:
     needs: build-and-push-images
     if: github.ref == 'refs/heads/prod'
     runs-on: ubuntu-latest
+    environment:
+      name: production
     env:
       SERVER_HOST: ${{ secrets.SERVER_IP }}
       SERVER_USER: ${{ secrets.SERVER_USER }}
