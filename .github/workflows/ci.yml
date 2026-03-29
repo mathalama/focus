@@ -88,9 +88,14 @@ jobs:
       # ДОБАВЛЕНО: Создаем пустые файлы .env, чтобы docker-compose не ругался
       - name: Create dummy env files
         run: |
+          # В корне
           touch .env
+          # Для бэкенда
           mkdir -p backend
           touch backend/.env
+          # Для бота (на этом он упал сейчас)
+          mkdir -p telegram-bot
+          touch telegram-bot/.env
           
       - name: Validate docker compose
         run: docker compose config
