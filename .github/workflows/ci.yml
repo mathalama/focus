@@ -98,10 +98,28 @@ jobs:
 
       - name: Normalize deploy settings
         run: |
-          server_host="$(printf '%s' "${SERVER_HOST}" | tr -d '\r' | sed -E 's#^[[:space:]]*https?://##; s#/.*$##; s/[[:space:]]+$//')"
+          server_host="$(printf '%s' "${SERVER_HOST}" | tr -d '\r' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
           server_user="$(printf '%s' "${SERVER_USER}" | tr -d '\r' | sed -E 's/[[:space:]]+$//')"
           server_port="$(printf '%s' "${SERVER_PORT}" | tr -d '\r' | sed -E 's/[[:space:]]+$//')"
           deploy_path="$(printf '%s' "${DEPLOY_PATH}" | tr -d '\r' | sed -E 's/[[:space:]]+$//')"
+
+          server_host="${server_host#http://}"
+          server_host="${server_host#https://}"
+          server_host="${server_host%%/*}"
+
+          if [[ "$server_host" == *"@"* ]]; then
+            if [ -z "$server_user" ]; then
+              server_user="${server_host%@*}"
+            fi
+            server_host="${server_host#*@}"
+          fi
+
+          if printf '%s' "$server_host" | grep -Eq '^[^:/]+:[0-9]+$'; then
+            if [ -z "$server_port" ]; then
+              server_port="${server_host##*:}"
+            fi
+            server_host="${server_host%:*}"
+          fi
 
           : "${server_user:=ubuntu}"
           : "${server_port:=22}"
