@@ -42,8 +42,6 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-    env_file:
-      - ./backend/.env
     environment:
       PORT: "8080"
       DATABASE_URL: postgres://mathalama:mathalama@postgres:5432/mathalama?sslmode=disable
