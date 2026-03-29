@@ -1,32 +1,12 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: mathalama-focus-postgres
-    environment:
-      POSTGRES_USER: mathalama
-      POSTGRES_PASSWORD: mathalama
-      POSTGRES_DB: mathalama
-    ports:
-      - "5433:5432"
-    volumes:
-      - focus_pg_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mathalama -d mathalama"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   migrate:
     build:
       context: ./backend
       dockerfile: Dockerfile
     image: mathalama-focus-backend:local
     container_name: mathalama-focus-migrate
-    depends_on:
-      postgres:
-        condition: service_healthy
     environment:
-      DATABASE_URL: postgres://mathalama:mathalama@postgres:5432/mathalama?sslmode=disable
+      DATABASE_URL: ${DATABASE_URL:-postgres://mathalama:mathalama@localhost:5432/mathalama?sslmode=disable}
       MIGRATIONS_DIR: /app/migrations
     entrypoint: ["/app/migrate"]
     restart: "no"
@@ -41,11 +21,14 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
-      PORT: "8080"
-      DATABASE_URL: postgres://mathalama:mathalama@postgres:5432/mathalama?sslmode=disable
-      ENABLE_DEV_LOGIN: "false"
+      PORT: ${PORT:-8080}
+      DATABASE_URL: ${DATABASE_URL:-postgres://mathalama:mathalama@localhost:5432/mathalama?sslmode=disable}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      ENABLE_DEV_LOGIN: ${ENABLE_DEV_LOGIN:-false}
+      TELEGRAM_BOT_AUTH_TOKEN: ${TELEGRAM_BOT_AUTH_TOKEN:-dev-telegram-bot-auth-change-me}
     ports:
-      - "8080:8080"
+      - "${BACKEND_PORT:-8080}:8080"
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health >/dev/null || exit 1"]
@@ -53,30 +36,5 @@ services:
       timeout: 5s
       retries: 5
 
-  telegram-bot:
-    build:
-      context: ./telegram-bot
-      dockerfile: Dockerfile
-    container_name: mathalama-focus-telegram-bot
-    depends_on:
-      backend:
-        condition: service_healthy
-    environment:
-      BACKEND_URL: http://backend:8080
-      APP_URL: http://localhost:5173
-      BOT_INTERNAL_API_ADDR: ":8091"
-    ports:
-      - "8091:8091"
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8091/health >/dev/null || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
 # Frontend intentionally runs outside Docker:
 # cd frontend && npm install && npm run dev
-
-volumes:
-  focus_pg_data:
-

@@ -46,30 +46,6 @@ services:
       - default
       - proxy
 
-  telegram-bot:
-    image: ${TELEGRAM_BOT_IMAGE}
-    container_name: mathalama-focus-telegram-bot
-    environment:
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
-      TELEGRAM_BOT_AUTH_TOKEN: ${TELEGRAM_BOT_AUTH_TOKEN}
-      BACKEND_URL: ${BACKEND_URL:-http://backend:8080}
-      APP_URL: ${APP_URL:-http://localhost:5173}
-      TELEGRAM_POLL_TIMEOUT_SECONDS: ${TELEGRAM_POLL_TIMEOUT_SECONDS:-30}
-      BOT_INTERNAL_API_ADDR: ${BOT_INTERNAL_API_ADDR:-:8091}
-    restart: unless-stopped
-    ports:
-      - ${BOT_PORT:-8091}:8091
-    depends_on:
-      backend:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8091/health >/dev/null || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - default
-
 networks:
   proxy:
     name: ${DOCKER_NETWORK:-global_proxy}
