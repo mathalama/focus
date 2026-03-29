@@ -78,19 +78,23 @@ jobs:
     needs: build-and-push-backend
     if: github.ref == 'refs/heads/dev'
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SERVER_IP }}
-          username: ubuntu
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          # Эти два параметра критичны для Oracle Cloud:
-          use_unsafe_ssh_client: true 
-          command_timeout: 20m
-          script: |
-            echo "Connected!"
-            # Логинимся в GHCR
+      - name: Deploy via native SSH
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          # 1. Настраиваем SSH-агента и ключ
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          
+          # 2. Добавляем сервер в известные хосты, чтобы не было промпта
+          ssh-keyscan -p 22 ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+
+          # 3. Выполняем деплой одной командой
+          ssh -i ~/.ssh/id_rsa ubuntu@${{ secrets.SERVER_IP }} << 'EOF'
+            echo "Connected successfully via native SSH!"
+            
+            # Логин в GHCR
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
             # Обновляем образ
@@ -101,7 +105,7 @@ jobs:
               -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
               ghcr.io/${{ github.repository }}/backend:latest /app/migrate
             
-            # Перезапуск
+            # Перезапуск контейнера
             docker stop focus-backend || true
             docker rm focus-backend || true
             
@@ -119,3 +123,6 @@ jobs:
               -e EMAIL_VERIFY_SUCCESS_REDIRECT="https://focus.mathalama.dev/login?verified=1" \
               -e EMAIL_VERIFY_FAIL_REDIRECT="https://focus.mathalama.dev/login?verified=0" \
               ghcr.io/${{ github.repository }}/backend:latest
+            
+            echo "Deploy finished!"
+          EOF
