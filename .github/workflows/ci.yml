@@ -3,23 +3,23 @@ name: CI/CD Focus Project
 on:
   push:
     branches: [dev, stage, prod]
-    paths:
-      - 'backend/**'
-      - 'docker-compose.yml'
-      - '.github/workflows/**'
   workflow_dispatch:
 
 jobs:
-  # 1. Проверка конфига (без создания пустых .env)
+  # 1. Валидация
   compose-validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Create temporary env files
+        run: |
+          touch .env
+          mkdir -p backend && touch backend/.env
+          mkdir -p telegram-bot && touch telegram-bot/.env
       - name: Validate Docker Compose
-        # Флаг --env-file /dev/null заставляет докер игнорировать отсутствие .env файлов
-        run: docker compose --env-file /dev/null config
+        run: docker compose config
 
-  # 2. Сборка бэкенда
+  # 2. Сборка
   build-and-push-backend:
     needs: compose-validate
     if: github.ref == 'refs/heads/dev'
@@ -39,43 +39,34 @@ jobs:
           push: true
           tags: ghcr.io/${{ github.repository }}/backend:latest
 
-  # 3. Деплой (Нативный SSH, чтобы не было ошибки Overflow)
+  # 3. Деплой
   deploy-backend:
     needs: build-and-push-backend
     runs-on: ubuntu-latest
     steps:
       - name: Deploy via Native SSH
         env:
-          # Прокидываем все секреты в переменные окружения GitHub Runner
+          # УБРАЛИ лишние '$' перед скобками!
           SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           SERVER_IP: ${{ secrets.SERVER_IP }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_AUTH_TOKEN }}
-          RESEND_KEY: ${{ secrets.RESEND_API_KEY }}
         run: |
-          # Настройка SSH ключа
           mkdir -p ~/.ssh
           echo "$SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           
-          # Добавляем сервер в известные хосты (решает getaddrinfo: Name or service not known)
+          # Теперь $SERVER_IP будет содержать чистый адрес
           ssh-keyscan -H "$SERVER_IP" >> ~/.ssh/known_hosts
 
-          # Подключаемся и деплоим
           ssh -i ~/.ssh/id_rsa ubuntu@$SERVER_IP << EOF
-            echo "Successfully connected to $SERVER_IP"
-            
             echo "$GHCR_TOKEN" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker pull ghcr.io/${{ github.repository }}/backend:latest
             
-            # 1. Миграции (Берем DATABASE_URL из секрета через -e)
             docker run --rm --network global_proxy \
               -e DATABASE_URL="$DATABASE_URL" \
               ghcr.io/${{ github.repository }}/backend:latest /app/migrate
             
-            # 2. Перезапуск контейнера (Все конфиги только через -e, никаких .env)
             docker stop focus-backend || true
             docker rm focus-backend || true
             
@@ -85,14 +76,7 @@ jobs:
               --restart unless-stopped \
               -e PORT=8080 \
               -e DATABASE_URL="$DATABASE_URL" \
-              -e JWT_SECRET="$JWT_SECRET" \
-              -e TELEGRAM_BOT_AUTH_TOKEN="$TG_TOKEN" \
-              -e RESEND_API_KEY="$RESEND_KEY" \
-              -e CORS_ORIGIN="https://focus.mathalama.dev" \
-              -e EMAIL_VERIFY_URL_BASE="https://focus-api.mathalama.dev/api/v1/auth/verify-email" \
-              -e EMAIL_VERIFY_SUCCESS_REDIRECT="https://focus.mathalama.dev/login?verified=1" \
-              -e EMAIL_VERIFY_FAIL_REDIRECT="https://focus.mathalama.dev/login?verified=0" \
+              -e JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+              -e TELEGRAM_BOT_AUTH_TOKEN="${{ secrets.TELEGRAM_BOT_AUTH_TOKEN }}" \
               ghcr.io/${{ github.repository }}/backend:latest
-            
-            echo "Deploy finished successfully!"
           EOF
