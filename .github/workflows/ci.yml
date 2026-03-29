@@ -85,22 +85,23 @@ jobs:
           username: ubuntu
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
-          command_timeout: 10m
-          sync: true
+          # Эти два параметра критичны для Oracle Cloud:
+          use_unsafe_ssh_client: true 
+          command_timeout: 20m
           script: |
-            # 1. Логин в реестр на сервере
+            echo "Connected!"
+            # Логинимся в GHCR
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
-            # 2. Обновляем образ
+            # Обновляем образ
             docker pull ghcr.io/${{ github.repository }}/backend:latest
             
-            # 3. Запуск миграций (разовый контейнер)
-            docker run --rm \
-              --network global_proxy \
+            # Миграции
+            docker run --rm --network global_proxy \
               -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
               ghcr.io/${{ github.repository }}/backend:latest /app/migrate
             
-            # 4. Перезапуск основного контейнера
+            # Перезапуск
             docker stop focus-backend || true
             docker rm focus-backend || true
             
