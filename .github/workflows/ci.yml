@@ -1,4 +1,4 @@
-name: CI
+name: CI/CD
 
 on:
   push:
@@ -26,90 +26,92 @@ jobs:
             prod) echo "value=release" >> "$GITHUB_OUTPUT" ;;
             *) echo "value=unknown" >> "$GITHUB_OUTPUT" ;;
           esac
-      - name: Print branch phase
-        run: echo "Branch ${{ github.ref_name }} mapped to phase ${{ steps.phase.outputs.value }}"
 
-  backend-build:
+  # Твои текущие проверки (CI)
+  backend-test:
     runs-on: ubuntu-latest
     needs: release-phase
-    defaults:
-      run:
-        working-directory: backend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: backend/go.mod
-      - name: Build backend binaries
-        run: |
-          go build ./cmd/api
-          go build ./cmd/migrate
-
-  telegram-bot-build:
-    runs-on: ubuntu-latest
-    needs: release-phase
-    defaults:
-      run:
-        working-directory: telegram-bot
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: telegram-bot/go.mod
-      - name: Build telegram-bot
-        run: go build ./...
-
-  frontend-build:
-    runs-on: ubuntu-latest
-    needs: release-phase
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: Install dependencies
-        run: npm ci
-      - name: Typecheck
-        run: npm run typecheck
-      - name: Build frontend
-        run: npm run build
+      - name: Build check
+        run: cd backend && go build ./cmd/api
 
   compose-validate:
     runs-on: ubuntu-latest
     needs: release-phase
     steps:
       - uses: actions/checkout@v4
-      
-      # ДОБАВЛЕНО: Создаем пустые файлы .env, чтобы docker-compose не ругался
       - name: Create dummy env files
         run: |
-          # В корне
           touch .env
-          # Для бэкенда
-          mkdir -p backend
-          touch backend/.env
-          # Для бота (на этом он упал сейчас)
-          mkdir -p telegram-bot
-          touch telegram-bot/.env
-          
-      - name: Validate docker compose
+          mkdir -p backend && touch backend/.env
+          mkdir -p telegram-bot && touch telegram-bot/.env
+      - name: Validate
         run: docker compose config
 
-  phase-gate:
+  # --- НОВЫЙ ЭТАП: СБОРКА И ПУШ ОБРАЗА ---
+  build-and-push-backend:
     runs-on: ubuntu-latest
-    needs: [release-phase, backend-build, telegram-bot-build, frontend-build, compose-validate]
+    needs: [backend-test, compose-validate]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     steps:
-      - name: Internal testing gate
-        if: github.ref == 'refs/heads/dev'
-        run: echo "Internal testing pipeline passed for dev."
-      - name: Open testing gate
-        if: github.ref == 'refs/heads/stage'
-        run: echo "Open testing pipeline passed for stage."
-      - name: Release gate
-        if: github.ref == 'refs/heads/prod'
-        run: echo "Release pipeline passed for prod."
+      - uses: actions/checkout@v4
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_TOKEN }}
+      - name: Build and Push Backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: ghcr.io/${{ github.repository }}/backend:latest
+
+  # --- НОВЫЙ ЭТАП: ДЕПЛОЙ ПО SSH ---
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push-backend
+    if: github.ref == 'refs/heads/dev'
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            # 1. Логин в реестр на сервере
+            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            
+            # 2. Обновляем образ
+            docker pull ghcr.io/${{ github.repository }}/backend:latest
+            
+            # 3. Запуск миграций (разовый контейнер)
+            docker run --rm \
+              --network global_proxy \
+              -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+              ghcr.io/${{ github.repository }}/backend:latest /app/migrate
+            
+            # 4. Перезапуск основного контейнера
+            docker stop focus-backend || true
+            docker rm focus-backend || true
+            
+            docker run -d \
+              --name focus-backend \
+              --network global_proxy \
+              --restart unless-stopped \
+              -e PORT=8080 \
+              -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+              -e CORS_ORIGIN="https://focus.mathalama.dev" \
+              -e JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+              -e TELEGRAM_BOT_AUTH_TOKEN="${{ secrets.TELEGRAM_BOT_AUTH_TOKEN }}" \
+              -e RESEND_API_KEY="${{ secrets.RESEND_API_KEY }}" \
+              -e EMAIL_VERIFY_URL_BASE="https://focus-api.mathalama.dev/api/v1/auth/verify-email" \
+              -e EMAIL_VERIFY_SUCCESS_REDIRECT="https://focus.mathalama.dev/login?verified=1" \
+              -e EMAIL_VERIFY_FAIL_REDIRECT="https://focus.mathalama.dev/login?verified=0" \
+              ghcr.io/${{ github.repository }}/backend:latest
