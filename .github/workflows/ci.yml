@@ -1,29 +1,29 @@
-name: CI/CD
+name: CI/CD Focus Project
 
 on:
   push:
     branches: [dev, stage, prod]
+    paths:
+      - 'backend/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/**'
   workflow_dispatch:
 
 jobs:
-  # ... (оставляем твои билды backend-test, frontend-build и т.д. без изменений)
-
+  # 1. Проверка конфига (без создания пустых .env)
   compose-validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Create dummy env files
-        run: |
-          touch .env
-          mkdir -p backend && touch backend/.env
-          mkdir -p telegram-bot && touch telegram-bot/.env
-      - name: Validate
-        run: docker compose config
+      - name: Validate Docker Compose
+        # Флаг --env-file /dev/null заставляет докер игнорировать отсутствие .env файлов
+        run: docker compose --env-file /dev/null config
 
+  # 2. Сборка бэкенда
   build-and-push-backend:
-    runs-on: ubuntu-latest
-    needs: [compose-validate]
+    needs: compose-validate
     if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Login to GHCR
@@ -39,45 +39,43 @@ jobs:
           push: true
           tags: ghcr.io/${{ github.repository }}/backend:latest
 
-  deploy:
-    runs-on: ubuntu-latest
+  # 3. Деплой (Нативный SSH, чтобы не было ошибки Overflow)
+  deploy-backend:
     needs: build-and-push-backend
-    if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
     steps:
-      - name: Deploy via native SSH
+      - name: Deploy via Native SSH
         env:
-          # Прокидываем ВСЕ нужные секреты в окружение этого шага
+          # Прокидываем все секреты в переменные окружения GitHub Runner
           SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           SERVER_IP: ${{ secrets.SERVER_IP }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_AUTH_TOKEN }}
+          RESEND_KEY: ${{ secrets.RESEND_API_KEY }}
         run: |
-          # 1. Настройка ключа
+          # Настройка SSH ключа
           mkdir -p ~/.ssh
           echo "$SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           
-          # 2. Добавление сервера в known_hosts (решает проблему getaddrinfo)
+          # Добавляем сервер в известные хосты (решает getaddrinfo: Name or service not known)
           ssh-keyscan -H "$SERVER_IP" >> ~/.ssh/known_hosts
 
-          # 3. Запуск команд на сервере через нативный SSH
-          # Используем EOF без кавычек, чтобы переменные подставились Гитхабом
+          # Подключаемся и деплоим
           ssh -i ~/.ssh/id_rsa ubuntu@$SERVER_IP << EOF
-            echo "Connected to server. Starting deployment..."
+            echo "Successfully connected to $SERVER_IP"
             
-            # Авторизация в Docker
             echo "$GHCR_TOKEN" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            
-            # Обновление образа
             docker pull ghcr.io/${{ github.repository }}/backend:latest
             
-            # Запуск миграций
+            # 1. Миграции (Берем DATABASE_URL из секрета через -e)
             docker run --rm --network global_proxy \
               -e DATABASE_URL="$DATABASE_URL" \
               ghcr.io/${{ github.repository }}/backend:latest /app/migrate
             
-            # Перезапуск бэкенда
+            # 2. Перезапуск контейнера (Все конфиги только через -e, никаких .env)
             docker stop focus-backend || true
             docker rm focus-backend || true
             
@@ -88,8 +86,13 @@ jobs:
               -e PORT=8080 \
               -e DATABASE_URL="$DATABASE_URL" \
               -e JWT_SECRET="$JWT_SECRET" \
+              -e TELEGRAM_BOT_AUTH_TOKEN="$TG_TOKEN" \
+              -e RESEND_API_KEY="$RESEND_KEY" \
               -e CORS_ORIGIN="https://focus.mathalama.dev" \
+              -e EMAIL_VERIFY_URL_BASE="https://focus-api.mathalama.dev/api/v1/auth/verify-email" \
+              -e EMAIL_VERIFY_SUCCESS_REDIRECT="https://focus.mathalama.dev/login?verified=1" \
+              -e EMAIL_VERIFY_FAIL_REDIRECT="https://focus.mathalama.dev/login?verified=0" \
               ghcr.io/${{ github.repository }}/backend:latest
             
-            echo "Deployment successful!"
+            echo "Deploy finished successfully!"
           EOF
