@@ -49,11 +49,23 @@ function setupEventListeners(): void {
 }
 
 async function updateUI(): Promise<void> {
-  const data = await chrome.storage.local.get('focusSession');
+  const data = await chrome.storage.local.get(['focusSession', 'authToken']);
   const session = data.focusSession as FocusSession;
+  const hasToken = !!data.authToken;
 
   const statusBadge = document.getElementById('status-badge');
   const timer = document.getElementById('timer');
+  const syncStatus = document.getElementById('sync-status');
+
+  if (syncStatus) {
+    if (hasToken) {
+      syncStatus.textContent = '● Synced';
+      syncStatus.style.color = '#4CAF50';
+    } else {
+      syncStatus.textContent = '○ Needs Login';
+      syncStatus.style.color = '#f44336';
+    }
+  }
 
   if (session?.active) {
     if (statusBadge) statusBadge.textContent = '● Focus Mode Active';

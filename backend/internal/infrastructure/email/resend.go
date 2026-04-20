@@ -22,12 +22,12 @@ func NewResendService(apiKey, fromEmail string, ttlMin int) *ResendService {
 	return &ResendService{
 		apiKey:    strings.TrimSpace(apiKey),
 		fromEmail: strings.TrimSpace(fromEmail),
-		client:    &http.Client{Timeout: 10 * time.Second},
+		client:    &http.Client{Timeout: 30 * time.Second},
 		ttlMin:    ttlMin,
 	}
 }
 
-func (s *ResendService) SendVerificationEmail(ctx context.Context, toEmail, toName, verifyLink string) error {
+func (s *ResendService) SendVerificationEmail(ctx context.Context, toEmail, toName, verifyLink, idempotencyKey string) error {
 	htmlBody := s.buildEmailHTML(
 		fmt.Sprintf("Hello %s,", htmlEscape(strings.TrimSpace(toName))),
 		"Welcome to Mathalama Focus! Please confirm your email address to activate your account and start your focus journey.",
@@ -43,10 +43,10 @@ func (s *ResendService) SendVerificationEmail(ctx context.Context, toEmail, toNa
 		"html":    htmlBody,
 	}
 
-	return s.send(ctx, payload)
+	return s.send(ctx, payload, idempotencyKey)
 }
 
-func (s *ResendService) SendPasswordResetEmail(ctx context.Context, toEmail, toName, resetLink string) error {
+func (s *ResendService) SendPasswordResetEmail(ctx context.Context, toEmail, toName, resetLink, idempotencyKey string) error {
 	htmlBody := s.buildEmailHTML(
 		fmt.Sprintf("Hello %s,", htmlEscape(strings.TrimSpace(toName))),
 		"We received a request to reset your password. Click the button below to choose a new one.",
@@ -62,10 +62,10 @@ func (s *ResendService) SendPasswordResetEmail(ctx context.Context, toEmail, toN
 		"html":    htmlBody,
 	}
 
-	return s.send(ctx, payload)
+	return s.send(ctx, payload, idempotencyKey)
 }
 
-func (s *ResendService) send(ctx context.Context, payload map[string]any) error {
+func (s *ResendService) send(ctx context.Context, payload map[string]any, idempotencyKey string) error {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
@@ -77,6 +77,9 @@ func (s *ResendService) send(ctx context.Context, payload map[string]any) error 
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+s.apiKey)
+	if idempotencyKey != "" {
+		req.Header.Set("Idempotency-Key", idempotencyKey)
+	}
 
 	resp, err := s.client.Do(req)
 	if err != nil {

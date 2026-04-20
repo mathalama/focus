@@ -247,7 +247,7 @@ const translations: Record<AppLanguage, TranslationDict> = {
     'profile.notificationsHint': 'Get browser notifications about session completion and break end, even if the tab is inactive.',
     'profile.enabled': 'Enabled',
     'profile.disabled': 'Disabled',
-    'profile.telegram.title': 'Mathalama Lab',
+    'profile.telegram.title': 'Mathalama Hub',
     'profile.telegram.subscribe': 'Subscribe to our Telegram channel for updates',
 
     'password.resetTitle': 'Reset Password',
@@ -534,7 +534,7 @@ const translations: Record<AppLanguage, TranslationDict> = {
     'profile.notificationsHint': 'Получайте уведомления о завершении сессии и перерывов, даже если вкладка неактивна.',
     'profile.enabled': 'Включены',
     'profile.disabled': 'Отключены',
-    'profile.telegram.title': 'Mathalama Lab',
+    'profile.telegram.title': 'Mathalama Hub',
     'profile.telegram.subscribe': 'Подпишитесь на наш Telegram-канал для обновлений',
     
     'password.resetTitle': 'Сбросить пароль',
@@ -821,7 +821,7 @@ const translations: Record<AppLanguage, TranslationDict> = {
     'profile.notificationsHint': 'Сессия аяқталғанда және ара қарсудың аяқталғанда ескертпелер алыңыз, тіпті вкладка белсенді болмаса да.',
     'profile.enabled': 'Қосулы',
     'profile.disabled': 'Өшімі',
-    'profile.telegram.title': 'Mathalama Lab',
+    'profile.telegram.title': 'Mathalama Hub',
     'profile.telegram.subscribe': 'Жаңартулар үшін біздің Telegram каналымызға жазылыңыз',
     
     'password.resetTitle': 'Құпиясөзді ысыру',

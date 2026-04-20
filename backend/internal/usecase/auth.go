@@ -7,7 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/mail"
 	"net/url"
 	"strings"
@@ -174,7 +174,7 @@ func (uc *AuthUseCase) Register(ctx context.Context, rawEmail, name, password st
 					emailSent = true
 					expiresAt = tokenExpiresAt.UTC()
 				} else {
-					log.Printf("register verification email send failed (user=%s): %v", user.ID, err)
+					slog.Error("register verification email send failed", "user_id", user.ID, "error", err)
 				}
 			}
 		}
@@ -314,7 +314,7 @@ func (uc *AuthUseCase) ResendVerification(ctx context.Context, rawEmail string) 
 	}
 
 	if err := uc.emailSvc.SendVerificationEmail(ctx, authUser.User.Email, authUser.User.Name, verifyLink); err != nil {
-		log.Printf("resend verification email send failed (user=%s): %v", authUser.User.ID, err)
+		slog.Error("resend verification email send failed", "user_id", authUser.User.ID, "error", err)
 		return ResendOutput{}, fmt.Errorf("send verification email: %w", err)
 	}
 
@@ -355,20 +355,20 @@ func (uc *AuthUseCase) ForgotPassword(ctx context.Context, rawEmail string) (For
 	// Create password reset token
 	rawToken, expiresAt, err := uc.userRepo.CreatePasswordResetToken(ctx, user.ID, uc.verifyTTL)
 	if err != nil {
-		log.Printf("forgot password: create token failed (user=%s): %v", user.ID, err)
+		slog.Error("forgot password: create token failed", "user_id", user.ID, "error", err)
 		return ForgotPasswordOutput{}, fmt.Errorf("create recovery token: %w", err)
 	}
 
 	// Build password reset link
 	resetLink, err := uc.buildResetLink(rawToken)
 	if err != nil {
-		log.Printf("forgot password: build link failed (user=%s): %v", user.ID, err)
+		slog.Error("forgot password: build link failed", "user_id", user.ID, "error", err)
 		return ForgotPasswordOutput{}, fmt.Errorf("build recovery link: %w", err)
 	}
 
 	// Send reset email
 	if err := uc.emailSvc.SendPasswordResetEmail(ctx, user.Email, user.Name, resetLink); err != nil {
-		log.Printf("forgot password: send email failed (user=%s): %v", user.ID, err)
+		slog.Error("forgot password: send email failed", "user_id", user.ID, "error", err)
 		return ForgotPasswordOutput{}, fmt.Errorf("send recovery email: %w", err)
 	}
 

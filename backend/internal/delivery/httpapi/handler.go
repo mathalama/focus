@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"mathalama-focus/backend/internal/usecase"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/10"
 	"github.com/google/uuid"
 )
 
@@ -34,13 +36,11 @@ type Handler struct {
 	goal                 *usecase.GoalUseCase
 	analytics            *usecase.AnalyticsUseCase
 	shop                 *usecase.ShopUseCase
-	telegram             *usecase.TelegramUseCase
 	notification         *usecase.NotificationUseCase
 	preferences          *usecase.PreferencesUseCase
 	dbKeepAlive          DBKeepAlive
 	emailDeliveries      EmailDeliveryReader
 	eventTracker         EventTracker
-	telegramBotAuthToken string
 }
 
 // NewHandler creates a new Handler with all use-case dependencies.
@@ -50,27 +50,23 @@ func NewHandler(
 	goal *usecase.GoalUseCase,
 	analytics *usecase.AnalyticsUseCase,
 	shop *usecase.ShopUseCase,
-	telegram *usecase.TelegramUseCase,
 	notification *usecase.NotificationUseCase,
 	preferences *usecase.PreferencesUseCase,
 	dbKeepAlive DBKeepAlive,
 	emailDeliveries EmailDeliveryReader,
 	eventTracker EventTracker,
-	telegramBotAuthToken string,
 ) *Handler {
 	return &Handler{
-		auth:                 auth,
-		session:              session,
-		goal:                 goal,
-		analytics:            analytics,
-		shop:                 shop,
-		telegram:             telegram,
-		notification:         notification,
-		preferences:          preferences,
-		dbKeepAlive:          dbKeepAlive,
-		emailDeliveries:      emailDeliveries,
-		eventTracker:         eventTracker,
-		telegramBotAuthToken: strings.TrimSpace(telegramBotAuthToken),
+		auth:            auth,
+		session:         session,
+		goal:            goal,
+		analytics:       analytics,
+		shop:            shop,
+		notification:    notification,
+		preferences:     preferences,
+		dbKeepAlive:     dbKeepAlive,
+		emailDeliveries: emailDeliveries,
+		eventTracker:    eventTracker,
 	}
 }
 
@@ -93,7 +89,7 @@ func (h *Handler) HandleFocusEvent(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		handleBindingError(c, err)
 		return
 	}
 
@@ -112,6 +108,18 @@ func (h *Handler) HandleFocusEvent(c *gin.Context) {
 
 func respondError(c *gin.Context, status int, msg string) {
 	c.JSON(status, gin.H{"error": msg})
+}
+
+func handleBindingError(c *gin.Context, err error) {
+	if ve, ok := err.(validator.ValidationErrors); ok {
+		var errs []string
+		for _, e := range ve {
+			errs = append(errs, fmt.Sprintf("field %s: %s", e.Field(), e.Tag()))
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": "validation failed", "details": errs})
+		return
+	}
+	respondError(c, http.StatusBadRequest, "invalid request body")
 }
 
 func parseOptionalInt(raw string) (int, error) {

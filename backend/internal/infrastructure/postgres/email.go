@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -71,7 +71,7 @@ func (r *Repository) VerifyEmailByToken(ctx context.Context, rawToken string) (d
 		tokenHash,
 	).Scan(&userID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			log.Printf("[Verify] Token not found or already used: %s", tokenHash)
+			slog.Warn("verify token not found or already used", "token_hash", tokenHash)
 			return domain.User{}, domain.ErrEmailTokenInvalid
 		}
 		return domain.User{}, fmt.Errorf("find email verification token: %w", err)
@@ -101,7 +101,7 @@ func (r *Repository) VerifyEmailByToken(ctx context.Context, rawToken string) (d
 		return domain.User{}, fmt.Errorf("commit verify email tx: %w", err)
 	}
 
-	log.Printf("[Verify] Successfully verified email for user %s (%s)", user.ID, user.Email)
+	slog.Info("successfully verified email", "user_id", user.ID, "email", user.Email)
 	return user, nil
 }
 

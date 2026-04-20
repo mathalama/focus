@@ -42,17 +42,76 @@ async function initStorage() {
   }
 }
 
-// Listen for messages from content script
+const API_BASE_URL = 'http://localhost:8080';
+
+// Backend communication service
+const BackendService = {
+  async getToken(): Promise<string | null> {
+    const data = await chrome.storage.local.get('authToken');
+    return data.authToken || null;
+  },
+
+  async setToken(token: string): Promise<void> {
+    await chrome.storage.local.set({ authToken: token });
+  },
+
+  async sendFocusEvent(action: 'start' | 'stop', durationMinutes?: number): Promise<boolean> {
+    const token = await this.getToken();
+    if (!token) {
+      console.warn('Cannot send focus event: no auth token');
+      return false;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/focus/event`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action,
+          duration: durationMinutes || 0
+        })
+      });
+
+      if (!response.ok) {
+        console.error('Failed to send focus event:', response.statusText);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error sending focus event:', error);
+      return false;
+    }
+  }
+};
+
+// Listen for messages from content script or popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'getFocusStatus') {
     getFocusStatus().then(sendResponse);
   } else if (request.action === 'focusStateChanged') {
     // Focus state changed from website via content script
     console.log('Focus state changed:', request.state);
+    if (request.state === 'active') {
+      BackendService.sendFocusEvent('start', request.duration);
+    } else if (request.state === 'completed' || request.state === 'abandoned') {
+      BackendService.sendFocusEvent('stop');
+    }
     sendResponse({ ok: true });
   } else if (request.action === 'stopFocus') {
-    // User clicked End Focus button
-    stopFocusSession().then(sendResponse);
+    // User clicked End Focus button in extension
+    stopFocusSession().then((ok) => {
+      BackendService.sendFocusEvent('stop');
+      sendResponse(ok);
+    });
+  } else if (request.action === 'setToken') {
+    console.log('Token received from content script');
+    BackendService.setToken(request.token).then(() => {
+      sendResponse({ ok: true });
+    });
   }
   return true; // Will respond asynchronously
 });

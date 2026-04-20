@@ -25,8 +25,8 @@ jobs:
       - name: Create placeholder env files
         run: |
           touch .env
-          mkdir -p backend telegram-bot
-          touch backend/.env telegram-bot/.env
+          mkdir -p backend
+          touch backend/.env
 
       - name: Validate local Docker Compose
         run: docker compose config
@@ -34,26 +34,13 @@ jobs:
       - name: Validate server Docker Compose
         env:
           BACKEND_IMAGE: ghcr.io/example/focus/backend:test
-          TELEGRAM_BOT_IMAGE: ghcr.io/example/focus/telegram-bot:test
           DATABASE_URL: postgres://user:pass@db:5432/focus?sslmode=disable
           JWT_SECRET: test-secret
-          TELEGRAM_BOT_AUTH_TOKEN: test-bot-auth
-          TELEGRAM_BOT_TOKEN: test-bot-token
         run: docker compose -f deploy/docker-compose.server.yml config
 
   build-and-push-images:
     needs: compose-validate
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - service: backend
-            context: ./backend
-            image_suffix: backend
-          - service: telegram-bot
-            context: ./telegram-bot
-            image_suffix: telegram-bot
     steps:
       - uses: actions/checkout@v4
 
@@ -67,14 +54,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_TOKEN }}
 
-      - name: Build and push ${{ matrix.service }}
+      - name: Build and push backend
         uses: docker/build-push-action@v6
         with:
-          context: ${{ matrix.context }}
+          context: ./backend
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/${{ matrix.image_suffix }}:${{ github.sha }}
-            ghcr.io/${{ github.repository }}/${{ matrix.image_suffix }}:latest
+            ghcr.io/${{ github.repository }}/backend:${{ github.sha }}
+            ghcr.io/${{ github.repository }}/backend:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -92,7 +79,7 @@ jobs:
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
       GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
       BACKEND_IMAGE: ghcr.io/${{ github.repository }}/backend:${{ github.sha }}
-      TELEGRAM_BOT_IMAGE: ghcr.io/${{ github.repository }}/telegram-bot:${{ github.sha }}
+      GITHUB_ACTOR: ${{ github.actor }}
     steps:
       - uses: actions/checkout@v4
 
@@ -108,16 +95,12 @@ jobs:
           server_host="${server_host%%/*}"
 
           if [[ "$server_host" == *"@"* ]]; then
-            if [ -z "$server_user" ]; then
-              server_user="${server_host%@*}"
-            fi
+            [ -z "$server_user" ] && server_user="${server_host%@*}"
             server_host="${server_host#*@}"
           fi
 
           if printf '%s' "$server_host" | grep -Eq '^[^:/]+:[0-9]+$'; then
-            if [ -z "$server_port" ]; then
-              server_port="${server_host##*:}"
-            fi
+            [ -z "$server_port" ] && server_port="${server_host##*:}"
             server_host="${server_host%:*}"
           fi
 
@@ -125,20 +108,9 @@ jobs:
           : "${server_port:=22}"
           : "${deploy_path:=/opt/focus}"
 
-          if [ -z "$server_host" ]; then
-            echo "SERVER_IP secret is empty or invalid" >&2
-            exit 1
-          fi
-
-          if [ -z "$SSH_PRIVATE_KEY" ]; then
-            echo "SSH_PRIVATE_KEY secret is empty" >&2
-            exit 1
-          fi
-
-          if [ -z "$GHCR_TOKEN" ]; then
-            echo "GHCR_TOKEN secret is empty" >&2
-            exit 1
-          fi
+          [ -z "$server_host" ]    && { echo "SERVER_IP secret is empty or invalid" >&2; exit 1; }
+          [ -z "$SSH_PRIVATE_KEY" ] && { echo "SSH_PRIVATE_KEY secret is empty" >&2; exit 1; }
+          [ -z "$GHCR_TOKEN" ]     && { echo "GHCR_TOKEN secret is empty" >&2; exit 1; }
 
           {
             echo "SERVER_HOST=$server_host"
@@ -163,54 +135,31 @@ jobs:
           ssh -p "$SERVER_PORT" "$SERVER_USER@$SERVER_HOST" "mkdir -p '$DEPLOY_PATH'"
           scp -P "$SERVER_PORT" deploy/docker-compose.server.yml "$SERVER_USER@$SERVER_HOST:$DEPLOY_PATH/docker-compose.yml"
 
-      - name: Render production env file
+      - name: Render and upload env file
         run: |
           cat > deploy.env <<EOF
           BACKEND_IMAGE=${BACKEND_IMAGE}
-          TELEGRAM_BOT_IMAGE=${TELEGRAM_BOT_IMAGE}
           DOCKER_NETWORK=${{ secrets.DOCKER_NETWORK }}
           BACKEND_PORT=${{ secrets.BACKEND_PORT }}
-          BOT_PORT=${{ secrets.BOT_PORT }}
           PORT=${{ secrets.PORT }}
           DATABASE_URL=${{ secrets.DATABASE_URL }}
           CORS_ORIGIN=${{ secrets.CORS_ORIGIN }}
           JWT_SECRET=${{ secrets.JWT_SECRET }}
-          ENABLE_DEV_LOGIN=${{ secrets.ENABLE_DEV_LOGIN }}
-          REFRESH_SESSION_TTL_HOURS=${{ secrets.REFRESH_SESSION_TTL_HOURS }}
-          MAX_ACTIVE_AUTH_SESSIONS=${{ secrets.MAX_ACTIVE_AUTH_SESSIONS }}
-          AUTH_SESSION_BIND_CLIENT=${{ secrets.AUTH_SESSION_BIND_CLIENT }}
-          MAX_SESSION_PAUSES=${{ secrets.MAX_SESSION_PAUSES }}
-          TELEGRAM_BOT_AUTH_TOKEN=${{ secrets.TELEGRAM_BOT_AUTH_TOKEN }}
-          TELEGRAM_LINK_CODE_TTL_MINUTES=${{ secrets.TELEGRAM_LINK_CODE_TTL_MINUTES }}
           RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}
           RESEND_FROM_EMAIL=${{ secrets.RESEND_FROM_EMAIL }}
-          EMAIL_OUTBOX_POLL_SECONDS=${{ secrets.EMAIL_OUTBOX_POLL_SECONDS }}
-          EMAIL_OUTBOX_MAX_ATTEMPTS=${{ secrets.EMAIL_OUTBOX_MAX_ATTEMPTS }}
-          EMAIL_VERIFY_URL_BASE=${{ secrets.EMAIL_VERIFY_URL_BASE }}
-          EMAIL_VERIFY_SUCCESS_REDIRECT=${{ secrets.EMAIL_VERIFY_SUCCESS_REDIRECT }}
-          EMAIL_VERIFY_FAIL_REDIRECT=${{ secrets.EMAIL_VERIFY_FAIL_REDIRECT }}
-          EMAIL_VERIFICATION_TTL_MINUTES=${{ secrets.EMAIL_VERIFICATION_TTL_MINUTES }}
-          EMAIL_RESET_PASSWORD_URL_BASE=${{ secrets.EMAIL_RESET_PASSWORD_URL_BASE }}
-          TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
-          BACKEND_URL=${{ secrets.BACKEND_URL }}
           APP_URL=${{ secrets.APP_URL }}
-          TELEGRAM_POLL_TIMEOUT_SECONDS=${{ secrets.TELEGRAM_POLL_TIMEOUT_SECONDS }}
-          BOT_INTERNAL_API_ADDR=${{ secrets.BOT_INTERNAL_API_ADDR }}
+          BACKEND_URL=${{ secrets.BACKEND_URL }}
           EOF
-
-      - name: Upload env file
-        run: |
           scp -P "$SERVER_PORT" deploy.env "$SERVER_USER@$SERVER_HOST:$DEPLOY_PATH/.env"
 
       - name: Deploy on server
         run: |
-          ssh -p "$SERVER_PORT" "$SERVER_USER@$SERVER_HOST" <<EOF
+          ssh -p "$SERVER_PORT" "$SERVER_USER@$SERVER_HOST" bash -s <<EOF
           set -euo pipefail
           cd "$DEPLOY_PATH"
-
-          echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          docker compose --env-file .env pull
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker compose --env-file .env pull backend migrate
           docker compose --env-file .env run --rm migrate
-          docker compose --env-file .env up -d backend telegram-bot
+          docker compose --env-file .env up -d backend
           docker image prune -f
           EOF

@@ -20,8 +20,6 @@ type Config struct {
 	MaxActiveAuthSessions      int
 	AuthSessionBindClient      bool
 	MaxSessionPauses           int
-	TelegramBotAuthToken       string
-	TelegramLinkCodeTTLMinutes int
 	ResendAPIKey               string
 	ResendFromEmail            string
 	EmailOutboxPollSeconds     int
@@ -38,46 +36,33 @@ var postgresURLPattern = regexp.MustCompile(`(?i)postgres(?:ql)?://[^\s'"]+`)
 func Load() (Config, error) {
 	_ = godotenv.Load()
 
+	appURL := strings.TrimRight(envOrDefault("APP_URL", "http://localhost:5173"), "/")
+	backendURL := strings.TrimRight(envOrDefault("BACKEND_URL", "http://localhost:8080"), "/")
+
 	cfg := Config{
 		Port:                       envOrDefault("PORT", "8080"),
 		DatabaseURL:                normalizeDatabaseURL(os.Getenv("DATABASE_URL")),
-		CorsOrigin:                 envOrDefault("CORS_ORIGIN", "http://localhost:5173"),
+		CorsOrigin:                 envOrDefault("CORS_ORIGIN", appURL),
 		JWTSecret:                  envOrDefault("JWT_SECRET", "dev-secret-change-me"),
-		EnableDevLogin:             boolOrDefault("ENABLE_DEV_LOGIN", true),
-		RefreshSessionTTLHours:     intOrDefault("REFRESH_SESSION_TTL_HOURS", 24*30),
+		EnableDevLogin:             boolOrDefault("ENABLE_DEV_LOGIN", false),
+		RefreshSessionTTLHours:     intOrDefault("REFRESH_SESSION_TTL_HOURS", 720),
 		MaxActiveAuthSessions:      intOrDefault("MAX_ACTIVE_AUTH_SESSIONS", 5),
 		AuthSessionBindClient:      boolOrDefault("AUTH_SESSION_BIND_CLIENT", true),
 		MaxSessionPauses:           intOrDefault("MAX_SESSION_PAUSES", 3),
-		TelegramBotAuthToken:       envOrDefault("TELEGRAM_BOT_AUTH_TOKEN", "dev-telegram-bot-auth-change-me"),
-		TelegramLinkCodeTTLMinutes: intOrDefault("TELEGRAM_LINK_CODE_TTL_MINUTES", 10),
 		ResendAPIKey:               strings.TrimSpace(os.Getenv("RESEND_API_KEY")),
 		ResendFromEmail:            strings.TrimSpace(os.Getenv("RESEND_FROM_EMAIL")),
 		EmailOutboxPollSeconds:     intOrDefault("EMAIL_OUTBOX_POLL_SECONDS", 2),
 		EmailOutboxMaxAttempts:     intOrDefault("EMAIL_OUTBOX_MAX_ATTEMPTS", 5),
-		EmailVerifyURLBase:         strings.TrimSpace(envOrDefault("EMAIL_VERIFY_URL_BASE", "http://localhost:8080/api/v1/auth/verify-email")),
-		EmailVerifySuccessRedirect: strings.TrimSpace(envOrDefault("EMAIL_VERIFY_SUCCESS_REDIRECT", "http://localhost:5173/login?verified=1")),
-		EmailVerifyFailRedirect:    strings.TrimSpace(envOrDefault("EMAIL_VERIFY_FAIL_REDIRECT", "http://localhost:5173/login?verified=0")),
+		EmailVerifyURLBase:         envOrDefault("EMAIL_VERIFY_URL_BASE", backendURL+"/api/v1/auth/verify-email"),
+		EmailVerifySuccessRedirect: envOrDefault("EMAIL_VERIFY_SUCCESS_REDIRECT", appURL+"/login?verified=1"),
+		EmailVerifyFailRedirect:    envOrDefault("EMAIL_VERIFY_FAIL_REDIRECT", appURL+"/login?verified=0"),
 		EmailVerificationTTLMin:    intOrDefault("EMAIL_VERIFICATION_TTL_MINUTES", 60),
-		EmailResetPasswordURLBase:  strings.TrimSpace(envOrDefault("EMAIL_RESET_PASSWORD_URL_BASE", "http://localhost:5173/reset-password")),
+		EmailResetPasswordURLBase:  envOrDefault("EMAIL_RESET_PASSWORD_URL_BASE", appURL+"/reset-password"),
 	}
 
-	if cfg.TelegramLinkCodeTTLMinutes <= 0 {
-		cfg.TelegramLinkCodeTTLMinutes = 10
-	}
+
 	if cfg.EmailVerificationTTLMin <= 0 {
 		cfg.EmailVerificationTTLMin = 60
-	}
-	if cfg.EmailOutboxPollSeconds <= 0 {
-		cfg.EmailOutboxPollSeconds = 2
-	}
-	if cfg.EmailOutboxMaxAttempts <= 0 {
-		cfg.EmailOutboxMaxAttempts = 5
-	}
-	if cfg.RefreshSessionTTLHours <= 0 {
-		cfg.RefreshSessionTTLHours = 24 * 30
-	}
-	if cfg.MaxActiveAuthSessions <= 0 {
-		cfg.MaxActiveAuthSessions = 5
 	}
 
 	if cfg.DatabaseURL == "" {
