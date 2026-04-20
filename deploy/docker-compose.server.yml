@@ -41,5 +41,5 @@ services:
 
 networks:
   db_network:
-    name: infrastructure_default
+    name: infra
     external: true
