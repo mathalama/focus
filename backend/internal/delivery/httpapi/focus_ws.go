@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -122,7 +122,7 @@ func HandleFocusWebSocket(c *gin.Context) {
 
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		log.Printf("websocket upgrade error: %v", err)
+		slog.Error("websocket upgrade failed", "error", err)
 		return
 	}
 
@@ -167,7 +167,7 @@ func (h *FocusHub) run() {
 			h.mu.Lock()
 			h.clients[client.userID] = client
 			h.mu.Unlock()
-			log.Printf("focus client registered: %s", client.userID)
+			slog.Info("focus client registered", "user_id", client.userID)
 
 		case client := <-h.unregister:
 			h.mu.Lock()
@@ -176,7 +176,7 @@ func (h *FocusHub) run() {
 				close(client.send)
 			}
 			h.mu.Unlock()
-			log.Printf("focus client unregistered: %s", client.userID)
+			slog.Info("focus client unregistered", "user_id", client.userID)
 
 		case event := <-h.broadcast:
 			h.mu.RLock()
@@ -186,7 +186,7 @@ func (h *FocusHub) run() {
 				case client.send <- event:
 				default:
 					// Channel full, drop event
-					log.Printf("focus event dropped for user %s", event.UserID)
+					slog.Warn("focus event dropped", "user_id", event.UserID)
 				}
 			}
 			h.mu.RUnlock()
@@ -211,12 +211,12 @@ func (c *FocusClient) readPump() {
 		var msg WebSocketMessage
 		err := c.conn.ReadJSON(&msg)
 		if err != nil {
-			log.Printf("websocket read error: %v", err)
+				slog.Error("websocket read failed", "error", err)
 			return
 		}
 
 		if msg.Type != "auth" {
-			log.Printf("expected auth message, got: %s", msg.Type)
+			slog.Warn("expected auth message", "type", msg.Type)
 			c.conn.WriteJSON(gin.H{"error": "authentication required"})
 			return
 		}
@@ -224,14 +224,14 @@ func (c *FocusClient) readPump() {
 		// Parse auth payload
 		payloadMap, ok := msg.Payload.(map[string]interface{})
 		if !ok {
-			log.Printf("invalid auth payload")
+			slog.Warn("invalid auth payload")
 			c.conn.WriteJSON(gin.H{"error": "invalid auth payload"})
 			return
 		}
 
 		token, ok := payloadMap["token"].(string)
 		if !ok || token == "" {
-			log.Printf("missing token in auth payload")
+			slog.Warn("missing token in auth payload")
 			c.conn.WriteJSON(gin.H{"error": "missing token"})
 			return
 		}
@@ -239,13 +239,13 @@ func (c *FocusClient) readPump() {
 		// Validate token and extract userID
 		userID, err := extractUserIDFromToken(token)
 		if err != nil {
-			log.Printf("invalid token: %v", err)
+			slog.Error("invalid token", "error", err)
 			c.conn.WriteJSON(gin.H{"error": "invalid token"})
 			return
 		}
 
 		c.userID = userID
-		log.Printf("focus client authenticated: %s", c.userID)
+		slog.Info("focus client authenticated", "user_id", c.userID)
 	}
 
 	for {
@@ -253,7 +253,7 @@ func (c *FocusClient) readPump() {
 		err := c.conn.ReadJSON(&msg)
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("websocket error: %v", err)
+				slog.Error("websocket error", "error", err)
 			}
 			break
 		}
@@ -264,7 +264,7 @@ func (c *FocusClient) readPump() {
 			// Parse focus event
 			payloadMap, ok := msg.Payload.(map[string]interface{})
 			if !ok {
-				log.Printf("invalid focus_session_event payload")
+				slog.Warn("invalid focus_session_event payload")
 				continue
 			}
 

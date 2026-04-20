@@ -155,7 +155,10 @@
     </div>
     
     <div class="status">
-      <div class="status-badge" id="status-badge">○ Not Active</div>
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+        <div class="status-badge" id="status-badge" style="margin-bottom: 0;">○ Not Active</div>
+        <div id="sync-status" style="font-size: 10px; color: #666; padding-top: 4px;">Syncing...</div>
+      </div>
       <div class="timer" id="timer" style="display: none;"></div>
       
       <p class="info-text">

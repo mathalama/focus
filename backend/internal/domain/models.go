@@ -49,14 +49,7 @@ type ProductEvent struct {
 	CreatedAt  time.Time      `json:"created_at"`
 }
 
-type TelegramIdentity struct {
-	TelegramUserID   int64     `json:"telegram_user_id"`
-	TelegramUsername string    `json:"telegram_username"`
-	TelegramFirst    string    `json:"telegram_first_name"`
-	TelegramLast     string    `json:"telegram_last_name"`
-	NotificationsOn  bool      `json:"notifications_enabled"`
-	LinkedAt         time.Time `json:"linked_at"`
-}
+
 
 type Goal struct {
 	ID                 string     `json:"id"`

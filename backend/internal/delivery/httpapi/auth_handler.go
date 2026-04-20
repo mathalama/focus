@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -13,31 +13,31 @@ import (
 )
 
 type devLoginRequest struct {
-	Email string `json:"email"`
-	Name  string `json:"name"`
+	Email string `json:"email" binding:"required,email"`
+	Name  string `json:"name" binding:"required"`
 }
 
 type registerRequest struct {
-	Email    string `json:"email"`
-	Name     string `json:"name"`
-	Password string `json:"password"`
+	Email    string `json:"email" binding:"required,email"`
+	Name     string `json:"name" binding:"required,min=2,max=100"`
+	Password string `json:"password" binding:"required,min=8,max=72"`
 }
 
 type loginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required"`
 }
 
 type resendVerificationRequest struct {
-	Email string `json:"email"`
+	Email string `json:"email" binding:"required,email"`
 }
 
 type refreshRequest struct {
-	RefreshToken string `json:"refresh_token"`
+	RefreshToken string `json:"refresh_token" binding:"required"`
 }
 
 type logoutRequest struct {
-	RefreshToken string `json:"refresh_token"`
+	RefreshToken string `json:"refresh_token" binding:"required"`
 }
 
 func authClientMeta(c *gin.Context) (string, string) {
@@ -47,7 +47,7 @@ func authClientMeta(c *gin.Context) (string, string) {
 func (h *Handler) DevLogin(c *gin.Context) {
 	var req devLoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, "invalid request body")
+		handleBindingError(c, err)
 		return
 	}
 
@@ -62,7 +62,7 @@ func (h *Handler) DevLogin(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		log.Printf("dev login failed: %v", err)
+		slog.Error("dev login failed", "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to login")
 		return
 	}
@@ -77,7 +77,7 @@ func (h *Handler) DevLogin(c *gin.Context) {
 func (h *Handler) Register(c *gin.Context) {
 	var req registerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, "invalid request body")
+		handleBindingError(c, err)
 		return
 	}
 
@@ -119,7 +119,7 @@ func (h *Handler) Register(c *gin.Context) {
 func (h *Handler) Login(c *gin.Context) {
 	var req loginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, "invalid request body")
+		handleBindingError(c, err)
 		return
 	}
 
@@ -134,7 +134,7 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 	if errors.Is(err, domain.ErrEmailNotVerified) {
-		log.Printf("[Auth] Login failed for %s: email not verified", req.Email)
+		slog.Warn("login failed: email not verified", "email", req.Email)
 		respondError(c, http.StatusForbidden, "email is not verified")
 		return
 	}
@@ -143,7 +143,7 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		log.Printf("login failed for %s: %v", req.Email, err)
+		slog.Error("login failed", "email", req.Email, "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to authenticate")
 		return
 	}
@@ -161,7 +161,7 @@ func (h *Handler) Login(c *gin.Context) {
 func (h *Handler) Refresh(c *gin.Context) {
 	var req refreshRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, "invalid request body")
+		handleBindingError(c, err)
 		return
 	}
 
@@ -176,7 +176,7 @@ func (h *Handler) Refresh(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		log.Printf("refresh failed: %v", err)
+		slog.Error("refresh failed", "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to refresh token")
 		return
 	}
@@ -192,7 +192,7 @@ func (h *Handler) Refresh(c *gin.Context) {
 func (h *Handler) Logout(c *gin.Context) {
 	var req logoutRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, "invalid request body")
+		handleBindingError(c, err)
 		return
 	}
 
@@ -205,7 +205,7 @@ func (h *Handler) Logout(c *gin.Context) {
 			respondError(c, http.StatusServiceUnavailable, "logout is temporarily unavailable, please try again")
 			return
 		}
-		log.Printf("logout failed: %v", err)
+		slog.Error("logout failed", "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to logout")
 		return
 	}
@@ -226,7 +226,7 @@ func (h *Handler) LogoutAll(c *gin.Context) {
 			respondError(c, http.StatusServiceUnavailable, "session management is temporarily unavailable")
 			return
 		}
-		log.Printf("logout all failed: %v", err)
+		slog.Error("logout all failed", "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to revoke sessions")
 		return
 	}
@@ -248,7 +248,7 @@ func (h *Handler) ListAuthSessions(c *gin.Context) {
 			respondError(c, http.StatusServiceUnavailable, "session management is temporarily unavailable")
 			return
 		}
-		log.Printf("list auth sessions failed: %v", err)
+		slog.Error("list auth sessions failed", "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to list auth sessions")
 		return
 	}
@@ -259,7 +259,7 @@ func (h *Handler) ListAuthSessions(c *gin.Context) {
 func (h *Handler) ResendVerificationEmail(c *gin.Context) {
 	var req resendVerificationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, "invalid request body")
+		handleBindingError(c, err)
 		return
 	}
 
@@ -364,7 +364,7 @@ func (h *Handler) ForgotPassword(c *gin.Context) {
 		Email string `json:"email"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, "invalid request body")
+		handleBindingError(c, err)
 		return
 	}
 
@@ -375,7 +375,7 @@ func (h *Handler) ForgotPassword(c *gin.Context) {
 
 	result, err := h.auth.ForgotPassword(c.Request.Context(), req.Email)
 	if err != nil {
-		log.Printf("forgot password error: %v", err)
+		slog.Error("forgot password failed", "error", err)
 		// Always return success to prevent email enumeration attacks
 		c.JSON(http.StatusOK, gin.H{
 			"reset_email_sent": false,
@@ -395,7 +395,7 @@ func (h *Handler) ResetPassword(c *gin.Context) {
 		NewPassword string `json:"new_password"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, "invalid request body")
+		handleBindingError(c, err)
 		return
 	}
 
@@ -421,7 +421,7 @@ func (h *Handler) ResetPassword(c *gin.Context) {
 			respondError(c, http.StatusBadRequest, "password must be between 8 and 72 characters")
 			return
 		}
-		log.Printf("reset password error: %v", err)
+		slog.Error("reset password failed", "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to reset password")
 		return
 	}

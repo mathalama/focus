@@ -36,7 +36,6 @@ jobs:
           BACKEND_IMAGE: ghcr.io/example/focus/backend:test
           DATABASE_URL: postgres://user:pass@db:5432/focus?sslmode=disable
           JWT_SECRET: test-secret
-          TELEGRAM_BOT_AUTH_TOKEN: test-bot-auth
         run: docker compose -f deploy/docker-compose.server.yml config
 
   build-and-push-images:
@@ -53,7 +52,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push backend
         uses: docker/build-push-action@v6
@@ -80,6 +79,7 @@ jobs:
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
       GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
       BACKEND_IMAGE: ghcr.io/${{ github.repository }}/backend:${{ github.sha }}
+      GITHUB_ACTOR: ${{ github.actor }}
     steps:
       - uses: actions/checkout@v4
 
@@ -95,37 +95,22 @@ jobs:
           server_host="${server_host%%/*}"
 
           if [[ "$server_host" == *"@"* ]]; then
-            if [ -z "$server_user" ]; then
-              server_user="${server_host%@*}"
-            fi
+            [ -z "$server_user" ] && server_user="${server_host%@*}"
             server_host="${server_host#*@}"
           fi
 
           if printf '%s' "$server_host" | grep -Eq '^[^:/]+:[0-9]+$'; then
-            if [ -z "$server_port" ]; then
-              server_port="${server_host##*:}"
-            fi
+            [ -z "$server_port" ] && server_port="${server_host##*:}"
             server_host="${server_host%:*}"
           fi
 
           : "${server_user:=ubuntu}"
           : "${server_port:=22}"
-          : "${deploy_path:=focus}"
+          : "${deploy_path:=/opt/focus}"
 
-          if [ -z "$server_host" ]; then
-            echo "SERVER_IP secret is empty or invalid" >&2
-            exit 1
-          fi
-
-          if [ -z "$SSH_PRIVATE_KEY" ]; then
-            echo "SSH_PRIVATE_KEY secret is empty" >&2
-            exit 1
-          fi
-
-          if [ -z "$GHCR_TOKEN" ]; then
-            echo "GHCR_TOKEN secret is empty" >&2
-            exit 1
-          fi
+          [ -z "$server_host" ]    && { echo "SERVER_IP secret is empty or invalid" >&2; exit 1; }
+          [ -z "$SSH_PRIVATE_KEY" ] && { echo "SSH_PRIVATE_KEY secret is empty" >&2; exit 1; }
+          [ -z "$GHCR_TOKEN" ]     && { echo "GHCR_TOKEN secret is empty" >&2; exit 1; }
 
           {
             echo "SERVER_HOST=$server_host"
@@ -150,7 +135,7 @@ jobs:
           ssh -p "$SERVER_PORT" "$SERVER_USER@$SERVER_HOST" "mkdir -p '$DEPLOY_PATH'"
           scp -P "$SERVER_PORT" deploy/docker-compose.server.yml "$SERVER_USER@$SERVER_HOST:$DEPLOY_PATH/docker-compose.yml"
 
-      - name: Render production env file
+      - name: Render and upload env file
         run: |
           cat > deploy.env <<EOF
           BACKEND_IMAGE=${BACKEND_IMAGE}
@@ -160,50 +145,21 @@ jobs:
           DATABASE_URL=${{ secrets.DATABASE_URL }}
           CORS_ORIGIN=${{ secrets.CORS_ORIGIN }}
           JWT_SECRET=${{ secrets.JWT_SECRET }}
-          ENABLE_DEV_LOGIN=${{ secrets.ENABLE_DEV_LOGIN }}
-          REFRESH_SESSION_TTL_HOURS=${{ secrets.REFRESH_SESSION_TTL_HOURS }}
-          MAX_ACTIVE_AUTH_SESSIONS=${{ secrets.MAX_ACTIVE_AUTH_SESSIONS }}
-          AUTH_SESSION_BIND_CLIENT=${{ secrets.AUTH_SESSION_BIND_CLIENT }}
-          MAX_SESSION_PAUSES=${{ secrets.MAX_SESSION_PAUSES }}
-          TELEGRAM_BOT_AUTH_TOKEN=${{ secrets.TELEGRAM_BOT_AUTH_TOKEN }}
-          TELEGRAM_LINK_CODE_TTL_MINUTES=${{ secrets.TELEGRAM_LINK_CODE_TTL_MINUTES }}
           RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}
           RESEND_FROM_EMAIL=${{ secrets.RESEND_FROM_EMAIL }}
-          EMAIL_OUTBOX_POLL_SECONDS=${{ secrets.EMAIL_OUTBOX_POLL_SECONDS }}
-          EMAIL_OUTBOX_MAX_ATTEMPTS=${{ secrets.EMAIL_OUTBOX_MAX_ATTEMPTS }}
-          EMAIL_VERIFY_URL_BASE=${{ secrets.EMAIL_VERIFY_URL_BASE }}
-          EMAIL_VERIFY_SUCCESS_REDIRECT=${{ secrets.EMAIL_VERIFY_SUCCESS_REDIRECT }}
-          EMAIL_VERIFY_FAIL_REDIRECT=${{ secrets.EMAIL_VERIFY_FAIL_REDIRECT }}
-          EMAIL_VERIFICATION_TTL_MINUTES=${{ secrets.EMAIL_VERIFICATION_TTL_MINUTES }}
-          EMAIL_RESET_PASSWORD_URL_BASE=${{ secrets.EMAIL_RESET_PASSWORD_URL_BASE }}
+          APP_URL=${{ secrets.APP_URL }}
+          BACKEND_URL=${{ secrets.BACKEND_URL }}
           EOF
-
-      - name: Upload env file
-        run: |
           scp -P "$SERVER_PORT" deploy.env "$SERVER_USER@$SERVER_HOST:$DEPLOY_PATH/.env"
 
       - name: Deploy on server
         run: |
-          ssh -p "$SERVER_PORT" "$SERVER_USER@$SERVER_HOST" <<EOF
+          ssh -p "$SERVER_PORT" "$SERVER_USER@$SERVER_HOST" bash -s <<EOF
           set -euo pipefail
           cd "$DEPLOY_PATH"
-
-          echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          docker compose --env-file .env pull
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker compose --env-file .env pull backend migrate
           docker compose --env-file .env run --rm migrate
           docker compose --env-file .env up -d backend
-          sleep 10
-          docker compose --env-file .env ps --all || true
-          docker ps -a --filter "name=mathalama-focus-backend" || true
-
-          backend_status="$(docker inspect -f '{{.State.Status}}' mathalama-focus-backend 2>/dev/null || true)"
-
-          if [ "$backend_status" != "running" ]; then
-            echo "Deployed backend container is not running" >&2
-            echo "backend status: ${backend_status:-missing}" >&2
-            docker logs mathalama-focus-backend || true
-            exit 1
-          fi
-
           docker image prune -f
           EOF

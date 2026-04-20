@@ -1,57 +1,39 @@
 package httpapi
 
 import (
-	"encoding/json"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
-
-type accessLog struct {
-	Timestamp string `json:"ts"`
-	Level     string `json:"level"`
-	Msg       string `json:"msg"`
-	RequestID string `json:"request_id,omitempty"`
-	Method    string `json:"method"`
-	Path      string `json:"path"`
-	Route     string `json:"route"`
-	Status    int    `json:"status"`
-	Duration  string `json:"duration"`
-	IP        string `json:"ip"`
-	UserAgent string `json:"user_agent"`
-	Error     string `json:"error,omitempty"`
-}
 
 // StructuredLogger emits one JSON log line per HTTP request.
 func StructuredLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		startedAt := time.Now()
 		c.Next()
+		status := c.Writer.Status()
+		duration := time.Since(startedAt)
 
-		entry := accessLog{
-			Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
-			Level:     "info",
-			Msg:       "http_request",
-			RequestID: getRequestID(c),
-			Method:    c.Request.Method,
-			Path:      c.Request.URL.Path,
-			Route:     c.FullPath(),
-			Status:    c.Writer.Status(),
-			Duration:  time.Since(startedAt).String(),
-			IP:        c.ClientIP(),
-			UserAgent: c.Request.UserAgent(),
+		args := []any{
+			slog.String("request_id", getRequestID(c)),
+			slog.String("method", c.Request.Method),
+			slog.String("path", c.Request.URL.Path),
+			slog.String("route", c.FullPath()),
+			slog.Int("status", status),
+			slog.Duration("duration", duration),
+			slog.String("ip", c.ClientIP()),
+			slog.String("user_agent", c.Request.UserAgent()),
 		}
 
 		if len(c.Errors) > 0 {
-			entry.Error = c.Errors.String()
+			args = append(args, slog.String("error", c.Errors.String()))
 		}
 
-		payload, err := json.Marshal(entry)
-		if err != nil {
-			log.Printf(`{"ts":"%s","level":"error","msg":"marshal_access_log_failed","error":"%v"}`, time.Now().UTC().Format(time.RFC3339Nano), err)
-			return
+		if status >= 500 {
+			slog.Error("http_request", args...)
+		} else {
+			slog.Info("http_request", args...)
 		}
-		log.Print(string(payload))
 	}
 }

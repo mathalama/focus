@@ -20,61 +20,86 @@ function isExtensionContextValid(): boolean {
 // Listen for focus state changes from the website via localStorage
 window.addEventListener('storage', (event) => {
   if (event.key === 'focus-session-state' && event.newValue) {
-    try {
-      if (!isExtensionContextValid()) {
-        console.warn('Extension context invalidated, reloading...');
-        window.location.reload();
-        return;
-      }
-
-      const data = JSON.parse(event.newValue);
-      const { state } = data;
-      
-      console.log('Content script received focus state change:', state);
-      
-      // Get blocked sites from extension storage
-      try {
-        chrome.storage.local.get('defaultBlockedSites', (data) => {
-          try {
-            const blockedSites = (data.defaultBlockedSites || []).filter(
-              (site: any) => site.enabled
-            );
-            
-            // Update focus session state
-            if (state === 'active') {
-              // Get duration from sessionStorage if available (defaults to 25 min)
-              const duration = JSON.parse(sessionStorage.getItem('focus-session-info') || '{}').duration || 25;
-              
-              chrome.storage.local.set({
-                focusSession: {
-                  active: true,
-                  startTime: Date.now(),
-                  duration: duration * 60 * 1000,
-                  blockedSites: blockedSites
-                }
-              });
-            } else if (state === 'paused' || state === 'completed') {
-              chrome.storage.local.set({
-                focusSession: {
-                  active: false,
-                  startTime: 0,
-                  duration: 0,
-                  blockedSites: []
-                }
-              });
-            }
-          } catch (storageError) {
-            console.error('Storage operation error:', storageError);
-          }
-        });
-      } catch (chromeError) {
-        console.error('Chrome API error:', chromeError);
-      }
-    } catch (e) {
-      console.error('Error parsing focus state:', e);
-    }
+    handleFocusStateChange(event.newValue);
+  }
+  
+  if (event.key === 'token' && event.newValue) {
+    syncToken(event.newValue);
   }
 });
+
+function handleFocusStateChange(newValue: string) {
+  try {
+    if (!isExtensionContextValid()) {
+      console.warn('Extension context invalidated, reloading...');
+      window.location.reload();
+      return;
+    }
+
+    const data = JSON.parse(newValue);
+    const { state } = data;
+    
+    console.log('Content script received focus state change:', state);
+    
+    // Get blocked sites from extension storage
+    chrome.storage.local.get('defaultBlockedSites', (data) => {
+      try {
+        const blockedSites = (data.defaultBlockedSites || []).filter(
+          (site: any) => site.enabled
+        );
+        
+        // Notify background script about state change
+        const duration = JSON.parse(sessionStorage.getItem('focus-session-info') || '{}').duration || 25;
+        chrome.runtime.sendMessage({ 
+          action: 'focusStateChanged', 
+          state: state,
+          duration: duration
+        });
+
+        // Still update local storage for immediate blocker feedback
+        if (state === 'active') {
+          chrome.storage.local.set({
+            focusSession: {
+              active: true,
+              startTime: Date.now(),
+              duration: duration * 60 * 1000,
+              blockedSites: blockedSites
+            }
+          });
+        } else {
+          chrome.storage.local.set({
+            focusSession: {
+              active: false,
+              startTime: 0,
+              duration: 0,
+              blockedSites: []
+            }
+          });
+        }
+      } catch (storageError) {
+        console.error('Storage operation error:', storageError);
+      }
+    });
+  } catch (e) {
+    console.error('Error parsing focus state:', e);
+  }
+}
+
+function syncToken(token: string) {
+  if (!token || !isExtensionContextValid()) return;
+  console.log('Syncing token to background script');
+  chrome.runtime.sendMessage({ action: 'setToken', token: token });
+}
+
+// Initial sync
+const initialToken = localStorage.getItem('token');
+if (initialToken) {
+  syncToken(initialToken);
+}
+const initialFocusState = localStorage.getItem('focus-session-state');
+if (initialFocusState) {
+  handleFocusStateChange(initialFocusState);
+}
 
 // Listen for storage changes from service worker (for stopFocus, etc)
 chrome.storage.onChanged.addListener((changes, area) => {

@@ -139,7 +139,7 @@ export const ProfilePage: React.FC = () => {
       </Card>
 
       <a 
-        href="https://t.me/mathalama_lab" 
+        href="https://t.me/mathalama_hub" 
         target="_blank" 
         rel="noopener noreferrer"
         className="block group"

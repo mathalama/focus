@@ -23,8 +23,6 @@ func NewRouter(handler *Handler, corsOrigin string, enableDevLogin bool, validat
 		AllowCredentials: true,
 	}))
 	authLimiter := NewIPRateLimiter(rate.Every(12*time.Second), 10, 10*time.Minute).Middleware()
-	botLimiter := NewIPRateLimiter(rate.Every(2*time.Second), 20, 10*time.Minute).Middleware()
-	telegramIdempotency := NewIdempotencyStore(30 * time.Minute).Middleware()
 	userIdempotency := NewIdempotencyStore(30 * time.Minute).Middleware()
 
 	// Public routes
@@ -44,10 +42,7 @@ func NewRouter(handler *Handler, corsOrigin string, enableDevLogin bool, validat
 	router.POST("/api/v1/auth/forgot-password", authLimiter, handler.ForgotPassword)
 	router.POST("/api/v1/auth/reset-password", authLimiter, handler.ResetPassword)
 
-	// Bot-to-bot routes (authenticated via X-Telegram-Bot-Auth header)
-	router.POST("/api/v1/integrations/telegram/link", botLimiter, telegramIdempotency, handler.TelegramLinkByCode)
-	router.GET("/api/v1/integrations/telegram/status", botLimiter, handler.TelegramStatusByUserID)
-	router.PATCH("/api/v1/integrations/telegram/notifications", botLimiter, handler.TelegramSetNotificationsByUserID)
+
 
 	// Protected routes (JWT)
 	api := router.Group("/api/v1")
@@ -56,9 +51,7 @@ func NewRouter(handler *Handler, corsOrigin string, enableDevLogin bool, validat
 		api.GET("/me", handler.GetMe)
 		api.POST("/auth/logout-all", handler.LogoutAll)
 		api.GET("/auth/sessions", handler.ListAuthSessions)
-		api.POST("/auth/telegram/link-code", handler.CreateTelegramLinkCode)
-		api.GET("/integrations/telegram", handler.GetTelegramIdentity)
-		api.DELETE("/integrations/telegram", handler.UnlinkTelegram)
+
 
 		api.POST("/goals", handler.CreateGoal)
 		api.GET("/goals", handler.ListGoals)

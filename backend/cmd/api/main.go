@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -21,18 +22,26 @@ import (
 )
 
 func main() {
+	// Initialize Structured Logging (slog)
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	slog.SetDefault(logger)
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("config error: %v", err)
+		slog.Error("failed to load config", "error", err)
+		os.Exit(1)
 	}
 
 	// Infrastructure
 	pool, err := postgres.NewPool(ctx, cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("database error: %v", err)
+		slog.Error("failed to connect to database", "error", err)
+		os.Exit(1)
 	}
 	defer pool.Close()
 
@@ -54,11 +63,11 @@ func main() {
 			migrationsDir = "migrations"
 		}
 	}
-	log.Printf("applying migrations from: %s", migrationsDir)
+	slog.Info("applying migrations", "dir", migrationsDir)
 	if err := postgres.ApplyMigrations(ctx, pool, migrationsDir); err != nil {
-		log.Printf("warning: migration error: %v", err)
+		slog.Warn("migration error", "error", err)
 	} else {
-		log.Println("migrations applied successfully")
+		slog.Info("migrations applied successfully")
 	}
 
 	repo := postgres.NewRepository(pool, cfg.MaxSessionPauses, cfg.MaxActiveAuthSessions, cfg.AuthSessionBindClient)
@@ -92,12 +101,12 @@ func main() {
 	goalUC := usecase.NewGoalUseCase(repo)
 	analyticsUC := usecase.NewAnalyticsUseCase(repo, repo)
 	shopUC := usecase.NewShopUseCase(repo)
-	telegramUC := usecase.NewTelegramUseCase(repo, time.Duration(cfg.TelegramLinkCodeTTLMinutes)*time.Minute)
+
 	notificationUC := usecase.NewNotificationUseCase(repo)
 	preferencesUC := usecase.NewPreferencesUseCase(repo, repo)
 
 	// Delivery
-	handler := httpapi.NewHandler(authUC, sessionUC, goalUC, analyticsUC, shopUC, telegramUC, notificationUC, preferencesUC, repo, emailOutbox, repo, cfg.TelegramBotAuthToken)
+	handler := httpapi.NewHandler(authUC, sessionUC, goalUC, analyticsUC, shopUC, notificationUC, preferencesUC, repo, emailOutbox, repo)
 	router := httpapi.NewRouter(handler, cfg.CorsOrigin, cfg.EnableDevLogin, jwtSvc.ValidateToken, cfg.JWTSecret)
 
 	srv := &http.Server{
@@ -116,8 +125,9 @@ func main() {
 		}
 	}()
 
-	log.Printf("Mathalama Focus backend listening on :%s", cfg.Port)
+	slog.Info("Mathalama Focus backend listening", "port", cfg.Port)
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("server error: %v", err)
+		slog.Error("server error", "error", err)
+		os.Exit(1)
 	}
 }

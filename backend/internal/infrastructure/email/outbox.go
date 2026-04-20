@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -29,8 +29,8 @@ type queuedEmail struct {
 type OutboxService struct {
 	pool   *pgxpool.Pool
 	sender interface {
-		SendVerificationEmail(context.Context, string, string, string) error
-		SendPasswordResetEmail(context.Context, string, string, string) error
+		SendVerificationEmail(context.Context, string, string, string, string) error
+		SendPasswordResetEmail(context.Context, string, string, string, string) error
 	}
 	pollEvery   time.Duration
 	maxAttempts int
@@ -40,8 +40,8 @@ type OutboxService struct {
 func NewOutboxService(
 	pool *pgxpool.Pool,
 	sender interface {
-		SendVerificationEmail(context.Context, string, string, string) error
-		SendPasswordResetEmail(context.Context, string, string, string) error
+		SendVerificationEmail(context.Context, string, string, string, string) error
+		SendPasswordResetEmail(context.Context, string, string, string, string) error
 	},
 	pollEvery time.Duration,
 	maxAttempts int,
@@ -102,7 +102,7 @@ func (s *OutboxService) loop(ctx context.Context) {
 			for i := 0; i < 50; i++ {
 				processed, err := s.processOne(ctx)
 				if err != nil {
-					log.Printf("email outbox process error: %v", err)
+					slog.Error("email outbox process failed", "error", err)
 					break
 				}
 				if !processed {
@@ -124,10 +124,10 @@ func (s *OutboxService) processOne(ctx context.Context) (bool, error) {
 
 	sendCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	var sendErr error
-	if job.EmailType == "password_reset" {
-		sendErr = s.sender.SendPasswordResetEmail(sendCtx, job.ToEmail, job.ToName, job.ResetLink)
+	if job.EmailType == "verification" {
+		sendErr = s.sender.SendVerificationEmail(sendCtx, job.ToEmail, job.ToName, job.VerifyLink, job.ID)
 	} else {
-		sendErr = s.sender.SendVerificationEmail(sendCtx, job.ToEmail, job.ToName, job.VerifyLink)
+		sendErr = s.sender.SendPasswordResetEmail(sendCtx, job.ToEmail, job.ToName, job.ResetLink, job.ID)
 	}
 	cancel()
 
