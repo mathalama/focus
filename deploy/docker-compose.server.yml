@@ -21,7 +21,6 @@ services:
     restart: "no"
     networks:
       - default
-      - proxy
 
   backend:
     image: ${BACKEND_IMAGE}
@@ -37,10 +36,6 @@ services:
       retries: 5
     networks:
       - default
-      - proxy
 
 
-networks:
-  proxy:
-    name: ${DOCKER_NETWORK:-global_proxy}
-    external: true
+
