@@ -99,6 +99,7 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 	if err != nil {
+		slog.Error("registration failed", "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to register user")
 		return
 	}

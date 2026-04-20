@@ -45,6 +45,7 @@ var trustedDomains = map[string]bool{
 	"bk.ru":      true,
 	"inbox.ru":   true,
 	"rambler.ru": true,
+	"mathalama.dev": true,
 }
 
 // AuthUseCase orchestrates authentication and user-management business logic.
