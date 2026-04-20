@@ -104,7 +104,7 @@ jobs:
             server_host="${server_host%:*}"
           fi
 
-          : "${server_user:=ubuntu}"
+          : "${server_user:=devops}"
           : "${server_port:=22}"
           : "${deploy_path:=/opt/focus}"
 
