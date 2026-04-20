@@ -1,11 +1,9 @@
 package httpapi
 
 import (
-	"errors"
 	"net/http"
 	"strings"
 
-	"mathalama-focus/backend/internal/domain"
 	"mathalama-focus/backend/internal/usecase"
 
 	"github.com/gin-gonic/gin"
