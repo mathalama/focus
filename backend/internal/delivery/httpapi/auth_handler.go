@@ -82,25 +82,8 @@ func (h *Handler) Register(c *gin.Context) {
 	}
 
 	out, err := h.auth.Register(c.Request.Context(), req.Email, req.Name, req.Password)
-	if errors.Is(err, domain.ErrEmailNotConfigured) {
-		respondError(c, http.StatusServiceUnavailable, "email verification is not configured")
-		return
-	}
-	if errors.Is(err, domain.ErrInvalidEmail) {
-		respondError(c, http.StatusBadRequest, "valid email is required")
-		return
-	}
-	if errors.Is(err, domain.ErrWeakPassword) {
-		respondError(c, http.StatusBadRequest, err.Error())
-		return
-	}
-	if errors.Is(err, domain.ErrAlreadyExists) {
-		respondError(c, http.StatusConflict, "email is already registered")
-		return
-	}
 	if err != nil {
-		slog.Error("registration failed", "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to register user")
+		h.handleError(c, err, "failed to register user")
 		return
 	}
 
@@ -126,26 +109,8 @@ func (h *Handler) Login(c *gin.Context) {
 
 	userAgent, ipAddress := authClientMeta(c)
 	user, tokens, err := h.auth.Login(c.Request.Context(), req.Email, req.Password, userAgent, ipAddress)
-	if errors.Is(err, domain.ErrInvalidEmail) {
-		respondError(c, http.StatusBadRequest, "valid email is required")
-		return
-	}
-	if errors.Is(err, domain.ErrInvalidCredentials) {
-		respondError(c, http.StatusUnauthorized, "invalid email or password")
-		return
-	}
-	if errors.Is(err, domain.ErrEmailNotVerified) {
-		slog.Warn("login failed: email not verified", "email", req.Email)
-		respondError(c, http.StatusForbidden, "email is not verified")
-		return
-	}
-	if errors.Is(err, domain.ErrAuthUnavailable) {
-		respondError(c, http.StatusServiceUnavailable, "login is temporarily unavailable, please try again in a minute")
-		return
-	}
 	if err != nil {
-		slog.Error("login failed", "email", req.Email, "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to authenticate")
+		h.handleError(c, err, "failed to authenticate")
 		return
 	}
 
@@ -168,17 +133,8 @@ func (h *Handler) Refresh(c *gin.Context) {
 
 	userAgent, ipAddress := authClientMeta(c)
 	user, tokens, err := h.auth.Refresh(c.Request.Context(), req.RefreshToken, userAgent, ipAddress)
-	if errors.Is(err, domain.ErrRefreshTokenInvalid) {
-		respondError(c, http.StatusUnauthorized, "invalid refresh token")
-		return
-	}
-	if errors.Is(err, domain.ErrAuthUnavailable) {
-		respondError(c, http.StatusServiceUnavailable, "session refresh is temporarily unavailable, please login again later")
-		return
-	}
 	if err != nil {
-		slog.Error("refresh failed", "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to refresh token")
+		h.handleError(c, err, "failed to refresh token")
 		return
 	}
 
@@ -198,16 +154,7 @@ func (h *Handler) Logout(c *gin.Context) {
 	}
 
 	if err := h.auth.Logout(c.Request.Context(), req.RefreshToken); err != nil {
-		if errors.Is(err, domain.ErrRefreshTokenInvalid) {
-			respondError(c, http.StatusUnauthorized, "invalid refresh token")
-			return
-		}
-		if errors.Is(err, domain.ErrAuthUnavailable) {
-			respondError(c, http.StatusServiceUnavailable, "logout is temporarily unavailable, please try again")
-			return
-		}
-		slog.Error("logout failed", "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to logout")
+		h.handleError(c, err, "failed to logout")
 		return
 	}
 
@@ -265,16 +212,8 @@ func (h *Handler) ResendVerificationEmail(c *gin.Context) {
 	}
 
 	out, err := h.auth.ResendVerification(c.Request.Context(), req.Email)
-	if errors.Is(err, domain.ErrEmailNotConfigured) {
-		respondError(c, http.StatusServiceUnavailable, "email verification is not configured")
-		return
-	}
-	if errors.Is(err, domain.ErrInvalidEmail) {
-		respondError(c, http.StatusBadRequest, "valid email is required")
-		return
-	}
 	if err != nil {
-		respondError(c, http.StatusBadGateway, "failed to send verification email")
+		h.handleError(c, err, "failed to send verification email")
 		return
 	}
 
@@ -319,12 +258,8 @@ func (h *Handler) GetMe(c *gin.Context) {
 	userID := getUserID(c)
 
 	user, err := h.auth.GetUser(c.Request.Context(), userID)
-	if errors.Is(err, domain.ErrNotFound) {
-		respondError(c, http.StatusNotFound, "user not found")
-		return
-	}
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to get user")
+		h.handleError(c, err, "failed to get user")
 		return
 	}
 
@@ -414,16 +349,7 @@ func (h *Handler) ResetPassword(c *gin.Context) {
 
 	user, err := h.auth.ResetPassword(c.Request.Context(), token, password)
 	if err != nil {
-		if errors.Is(err, domain.ErrInvalidToken) {
-			respondError(c, http.StatusBadRequest, "invalid or expired reset token")
-			return
-		}
-		if errors.Is(err, domain.ErrWeakPassword) {
-			respondError(c, http.StatusBadRequest, "password must be between 8 and 72 characters")
-			return
-		}
-		slog.Error("reset password failed", "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to reset password")
+		h.handleError(c, err, "failed to reset password")
 		return
 	}
 

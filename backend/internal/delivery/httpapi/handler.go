@@ -110,6 +110,53 @@ func respondError(c *gin.Context, status int, msg string) {
 	c.JSON(status, gin.H{"error": msg})
 }
 
+func (h *Handler) handleError(c *gin.Context, err error, fallbackMsg string) {
+	if err == nil {
+		return
+	}
+
+	status := http.StatusInternalServerError
+	msg := fallbackMsg
+
+	switch {
+	case errors.Is(err, domain.ErrNotFound):
+		status = http.StatusNotFound
+		msg = err.Error()
+	case errors.Is(err, domain.ErrAlreadyExists):
+		status = http.StatusConflict
+		msg = err.Error()
+	case errors.Is(err, domain.ErrInvalidEmail), errors.Is(err, domain.ErrWeakPassword), errors.Is(err, domain.ErrEmailTokenInvalid), errors.Is(err, domain.ErrInvalidToken):
+		status = http.StatusBadRequest
+		msg = err.Error()
+	case errors.Is(err, domain.ErrInvalidCredentials):
+		status = http.StatusUnauthorized
+		msg = "invalid email or password"
+	case errors.Is(err, domain.ErrEmailNotVerified):
+		status = http.StatusForbidden
+		msg = "email is not verified"
+	case errors.Is(err, domain.ErrEmailNotConfigured), errors.Is(err, domain.ErrAuthUnavailable):
+		status = http.StatusServiceUnavailable
+		msg = err.Error()
+	case errors.Is(err, domain.ErrInsufficientBalance), errors.Is(err, domain.ErrPauseLimitReached), errors.Is(err, domain.ErrInvalidState), errors.Is(err, domain.ErrGoalCompleted):
+		status = http.StatusConflict
+		msg = err.Error()
+	case errors.Is(err, domain.ErrForbidden):
+		status = http.StatusForbidden
+		msg = "forbidden"
+	case errors.Is(err, domain.ErrRefreshTokenInvalid):
+		status = http.StatusUnauthorized
+		msg = "invalid session"
+	}
+
+	if status == http.StatusInternalServerError {
+		slog.Error("internal error", "method", c.Request.Method, "path", c.Request.URL.Path, "error", err)
+	} else {
+		slog.Warn("request error", "method", c.Request.Method, "path", c.Request.URL.Path, "status", status, "error", err)
+	}
+
+	respondError(c, status, msg)
+}
+
 func handleBindingError(c *gin.Context, err error) {
 	if ve, ok := err.(validator.ValidationErrors); ok {
 		var errs []string
@@ -155,20 +202,8 @@ func (h *Handler) sessionAction(c *gin.Context, action func(userID, sessionID st
 	}
 
 	payload, err := action(userID, sessionID)
-	if errors.Is(err, domain.ErrPauseLimitReached) {
-		respondError(c, http.StatusConflict, "pause limit reached")
-		return
-	}
-	if errors.Is(err, domain.ErrInvalidState) {
-		respondError(c, http.StatusConflict, "session cannot perform this action")
-		return
-	}
-	if errors.Is(err, domain.ErrNotFound) {
-		respondError(c, http.StatusNotFound, "session not found")
-		return
-	}
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "action failed")
+		h.handleError(c, err, "action failed")
 		return
 	}
 
@@ -182,7 +217,7 @@ func (h *Handler) GetSessionPreferences(c *gin.Context) {
 
 	prefs, err := h.preferences.GetSessionPreferences(c.Request.Context(), userID)
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to get preferences")
+		h.handleError(c, err, "failed to get preferences")
 		return
 	}
 
@@ -200,7 +235,7 @@ func (h *Handler) UpdateSessionPreferences(c *gin.Context) {
 
 	updated, err := h.preferences.UpdateSessionPreferences(c.Request.Context(), userID, prefs)
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to update preferences")
+		h.handleError(c, err, "failed to update preferences")
 		return
 	}
 
@@ -212,7 +247,7 @@ func (h *Handler) ListNotificationSchedules(c *gin.Context) {
 
 	schedules, err := h.preferences.GetNotificationSchedules(c.Request.Context(), userID)
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to list schedules")
+		h.handleError(c, err, "failed to list schedules")
 		return
 	}
 
@@ -234,7 +269,7 @@ func (h *Handler) CreateNotificationSchedule(c *gin.Context) {
 
 	created, err := h.preferences.CreateNotificationSchedule(c.Request.Context(), userID, schedule)
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create schedule")
+		h.handleError(c, err, "failed to create schedule")
 		return
 	}
 
@@ -253,7 +288,7 @@ func (h *Handler) UpdateNotificationSchedule(c *gin.Context) {
 
 	updated, err := h.preferences.UpdateNotificationSchedule(c.Request.Context(), userID, scheduleID, schedule)
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to update schedule")
+		h.handleError(c, err, "failed to update schedule")
 		return
 	}
 
@@ -265,7 +300,7 @@ func (h *Handler) DeleteNotificationSchedule(c *gin.Context) {
 	scheduleID := c.Param("id")
 
 	if err := h.preferences.DeleteNotificationSchedule(c.Request.Context(), userID, scheduleID); err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to delete schedule")
+		h.handleError(c, err, "failed to delete schedule")
 		return
 	}
 

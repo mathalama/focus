@@ -41,12 +41,8 @@ func (h *Handler) CreateGoal(c *gin.Context) {
 		RecommendedMinutes: req.RecommendedMinutes,
 		Tags:               req.Tags,
 	})
-	if errors.Is(err, domain.ErrNotFound) {
-		respondError(c, http.StatusUnauthorized, "invalid session, please login again")
-		return
-	}
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create goal")
+		h.handleError(c, err, "failed to create goal")
 		return
 	}
 
@@ -63,7 +59,7 @@ func (h *Handler) ListGoals(c *gin.Context) {
 
 	goals, err := h.goal.List(c.Request.Context(), userID)
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to list goals")
+		h.handleError(c, err, "failed to list goals")
 		return
 	}
 
@@ -75,7 +71,7 @@ func (h *Handler) ListGoalHistory(c *gin.Context) {
 
 	goals, err := h.goal.ListHistory(c.Request.Context(), userID)
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to list goal history")
+		h.handleError(c, err, "failed to list goal history")
 		return
 	}
 
@@ -93,11 +89,7 @@ func (h *Handler) GetGoal(c *gin.Context) {
 
 	goal, err := h.goal.Get(c.Request.Context(), userID, goalID)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			respondError(c, http.StatusNotFound, "goal not found")
-			return
-		}
-		respondError(c, http.StatusInternalServerError, "failed to get goal")
+		h.handleError(c, err, "failed to get goal")
 		return
 	}
 
@@ -141,11 +133,7 @@ func (h *Handler) UpdateGoal(c *gin.Context) {
 		Tags:               req.Tags,
 	})
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			respondError(c, http.StatusNotFound, "goal not found")
-			return
-		}
-		respondError(c, http.StatusInternalServerError, "failed to update goal")
+		h.handleError(c, err, "failed to update goal")
 		return
 	}
 
@@ -163,11 +151,7 @@ func (h *Handler) DeleteGoal(c *gin.Context) {
 
 	err := h.goal.Delete(c.Request.Context(), userID, goalID)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			respondError(c, http.StatusNotFound, "goal not found")
-			return
-		}
-		respondError(c, http.StatusInternalServerError, "failed to delete goal")
+		h.handleError(c, err, "failed to delete goal")
 		return
 	}
 

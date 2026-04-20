@@ -51,16 +51,8 @@ func (h *Handler) StartSession(c *gin.Context) {
 		RecommendedMinutes: req.RecommendedMinutes,
 		IsStrict:           req.IsStrict,
 	})
-	if errors.Is(err, domain.ErrGoalCompleted) {
-		respondError(c, http.StatusConflict, "goal already completed")
-		return
-	}
-	if errors.Is(err, domain.ErrNotFound) {
-		respondError(c, http.StatusNotFound, "goal not found")
-		return
-	}
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to start session")
+		h.handleError(c, err, "failed to start session")
 		return
 	}
 
@@ -76,12 +68,12 @@ func (h *Handler) GetActiveSession(c *gin.Context) {
 	userID := getUserID(c)
 
 	session, err := h.session.GetActive(c.Request.Context(), userID)
-	if errors.Is(err, domain.ErrNotFound) {
-		c.JSON(http.StatusOK, gin.H{"session": nil})
-		return
-	}
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to get active session")
+		if errors.Is(err, domain.ErrNotFound) {
+			c.JSON(http.StatusOK, gin.H{"session": nil})
+			return
+		}
+		h.handleError(c, err, "failed to get active session")
 		return
 	}
 
@@ -96,12 +88,8 @@ func (h *Handler) GetSession(c *gin.Context) {
 	}
 
 	session, err := h.session.Get(c.Request.Context(), userID, sessionID)
-	if errors.Is(err, domain.ErrNotFound) {
-		respondError(c, http.StatusNotFound, "session not found")
-		return
-	}
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to get session")
+		h.handleError(c, err, "failed to get session")
 		return
 	}
 
@@ -145,7 +133,7 @@ func (h *Handler) ListSessionHistory(c *gin.Context) {
 		Limit:      limit,
 	})
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to load session history")
+		h.handleError(c, err, "failed to load session history")
 		return
 	}
 
@@ -171,16 +159,8 @@ func (h *Handler) AbandonSession(c *gin.Context) {
 		return
 	}
 	session, err := h.session.Abandon(c.Request.Context(), userID, sessionID)
-	if errors.Is(err, domain.ErrInvalidState) {
-		respondError(c, http.StatusConflict, "session cannot perform this action")
-		return
-	}
-	if errors.Is(err, domain.ErrNotFound) {
-		respondError(c, http.StatusNotFound, "session not found")
-		return
-	}
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "action failed")
+		h.handleError(c, err, "action failed")
 		return
 	}
 
@@ -203,16 +183,8 @@ func (h *Handler) CompleteSession(c *gin.Context) {
 		return
 	}
 	session, err := h.session.Complete(c.Request.Context(), userID, sessionID)
-	if errors.Is(err, domain.ErrInvalidState) {
-		respondError(c, http.StatusConflict, "session cannot perform this action")
-		return
-	}
-	if errors.Is(err, domain.ErrNotFound) {
-		respondError(c, http.StatusNotFound, "session not found")
-		return
-	}
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "action failed")
+		h.handleError(c, err, "action failed")
 		return
 	}
 
@@ -241,12 +213,8 @@ func (h *Handler) AddInterruption(c *gin.Context) {
 	}
 
 	interruption, err := h.session.AddInterruption(c.Request.Context(), userID, sessionID, reason)
-	if errors.Is(err, domain.ErrNotFound) {
-		respondError(c, http.StatusNotFound, "session not found")
-		return
-	}
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to log interruption")
+		h.handleError(c, err, "failed to log interruption")
 		return
 	}
 
@@ -280,12 +248,8 @@ func (h *Handler) UpsertReflection(c *gin.Context) {
 		WhatWasHard: req.WhatWasHard,
 		NextAction:  req.NextAction,
 	})
-	if errors.Is(err, domain.ErrNotFound) {
-		respondError(c, http.StatusNotFound, "session not found")
-		return
-	}
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to save reflection")
+		h.handleError(c, err, "failed to save reflection")
 		return
 	}
 
@@ -303,15 +267,7 @@ func (h *Handler) DeleteSession(c *gin.Context) {
 
 	err := h.session.DeleteSession(c.Request.Context(), userID, sessionID)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			respondError(c, http.StatusNotFound, "session not found")
-			return
-		}
-		if errors.Is(err, domain.ErrInvalidState) {
-			respondError(c, http.StatusBadRequest, "cannot delete active or paused sessions")
-			return
-		}
-		respondError(c, http.StatusInternalServerError, "failed to delete session")
+		h.handleError(c, err, "failed to delete session")
 		return
 	}
 
@@ -332,11 +288,7 @@ func (h *Handler) DeleteReflection(c *gin.Context) {
 
 	err := h.session.DeleteReflection(c.Request.Context(), userID, sessionID)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			respondError(c, http.StatusNotFound, "session not found")
-			return
-		}
-		respondError(c, http.StatusInternalServerError, "failed to delete reflection")
+		h.handleError(c, err, "failed to delete reflection")
 		return
 	}
 
