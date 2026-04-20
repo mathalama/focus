@@ -34,24 +34,6 @@ func roundToTenth(value float64) float64 {
 	return math.Round(value*10) / 10
 }
 
-func generateTelegramLinkCode(length int) (string, error) {
-	const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-	if length <= 0 {
-		return "", errors.New("invalid code length")
-	}
-
-	buf := make([]byte, length)
-	randomBuf, err := randomBytes(length)
-	if err != nil {
-		return "", err
-	}
-
-	for i, b := range randomBuf {
-		buf[i] = alphabet[int(b)%len(alphabet)]
-	}
-
-	return string(buf), nil
-}
 
 func generateRandomToken(byteLength int) (string, error) {
 	if byteLength <= 0 {

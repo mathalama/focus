@@ -12,7 +12,7 @@ import (
 	"mathalama-focus/backend/internal/usecase"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-playground/validator/10"
+	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 )
 
@@ -31,16 +31,16 @@ type DBKeepAlive interface {
 
 // Handler groups all HTTP handlers and their use-case dependencies.
 type Handler struct {
-	auth                 *usecase.AuthUseCase
-	session              *usecase.SessionUseCase
-	goal                 *usecase.GoalUseCase
-	analytics            *usecase.AnalyticsUseCase
-	shop                 *usecase.ShopUseCase
-	notification         *usecase.NotificationUseCase
-	preferences          *usecase.PreferencesUseCase
-	dbKeepAlive          DBKeepAlive
-	emailDeliveries      EmailDeliveryReader
-	eventTracker         EventTracker
+	auth            *usecase.AuthUseCase
+	session         *usecase.SessionUseCase
+	goal            *usecase.GoalUseCase
+	analytics       *usecase.AnalyticsUseCase
+	shop            *usecase.ShopUseCase
+	notification    *usecase.NotificationUseCase
+	preferences     *usecase.PreferencesUseCase
+	dbKeepAlive     DBKeepAlive
+	emailDeliveries EmailDeliveryReader
+	eventTracker    EventTracker
 }
 
 // NewHandler creates a new Handler with all use-case dependencies.

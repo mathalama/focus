@@ -69,15 +69,6 @@ type ShopRepository interface {
 	GetLeaderboard(ctx context.Context) ([]domain.LeaderboardEntry, error)
 }
 
-// TelegramRepository handles telegram-identity persistence.
-type TelegramRepository interface {
-	CreateTelegramLinkCode(ctx context.Context, userID string, ttl time.Duration) (string, time.Time, error)
-	LinkTelegramByCode(ctx context.Context, input TelegramLinkInput) (domain.User, error)
-	GetTelegramIdentity(ctx context.Context, userID string) (domain.TelegramIdentity, error)
-	GetUserByTelegramUserID(ctx context.Context, telegramUserID int64) (domain.User, bool, error)
-	SetTelegramNotifications(ctx context.Context, telegramUserID int64, enabled bool) error
-	UnlinkTelegram(ctx context.Context, userID string) error
-}
 
 // NotificationRepository handles notification sound preferences.
 type NotificationRepository interface {

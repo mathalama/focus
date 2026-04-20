@@ -32,13 +32,6 @@ type ReflectionInput struct {
 	NextAction  string
 }
 
-type TelegramLinkInput struct {
-	Code             string
-	TelegramUserID   int64
-	TelegramUsername string
-	TelegramFirst    string
-	TelegramLast     string
-}
 
 type SessionHistoryFilter struct {
 	Period     string
